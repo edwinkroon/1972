@@ -13,17 +13,27 @@ class GameViewController: UIViewController {
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        
-        if let view = self.view as! SKView? {
-            // Create game scene with fixed portrait size (1942-style shooter)
-            let scene = GameScene(size: CGSize(width: 1536, height: 2048))
-            scene.scaleMode = .aspectFill
-            view.presentScene(scene)
 
-            view.ignoresSiblingOrder = true
-            view.showsFPS = true
-            view.showsNodeCount = true
+        // Zorg dat we een SKView hebben (storyboard heeft vaak gewone UIView → dan geen scene = zwart)
+        let skView: SKView
+        if let v = view as? SKView {
+            skView = v
+        } else {
+            skView = SKView(frame: view.bounds)
+            skView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+            view.addSubview(skView)
         }
+
+        view.backgroundColor = .black
+        skView.backgroundColor = SKColor(red: 0.2, green: 0.4, blue: 0.7, alpha: 1)
+
+        let scene = GameScene(size: CGSize(width: 1536, height: 2048))
+        scene.scaleMode = .aspectFill
+        skView.presentScene(scene)
+
+        skView.ignoresSiblingOrder = true
+        skView.showsFPS = true
+        skView.showsNodeCount = true
     }
 
     override var supportedInterfaceOrientations: UIInterfaceOrientationMask {
