@@ -1046,49 +1046,61 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         }
         let highscore = max(score, prevHigh)
 
-        let overlay = SKSpriteNode(color: SKColor(white: 0, alpha: 0.65), size: size)
+        // Overlay: zelfde space-blauw als achtergrond, gedimd
+        let overlay = SKSpriteNode(color: SKColor(red: 0.06, green: 0.08, blue: 0.18, alpha: 0.88), size: size)
         overlay.position = CGPoint(x: size.width / 2, y: size.height / 2)
         overlay.zPosition = 199
         overlay.name = "overlay"
         addChild(overlay)
 
+        // Panel in stijl van bovenbalk (donker, subtiel)
+        let panelW = size.width - 48
+        let panelH: CGFloat = 280
+        let panel = SKSpriteNode(color: SKColor(white: 0.1, alpha: 0.92), size: CGSize(width: panelW, height: panelH))
+        panel.position = CGPoint(x: size.width / 2, y: size.height / 2)
+        panel.zPosition = 200
+        addChild(panel)
+
         let label = SKLabelNode(fontNamed: "Avenir-Bold")
-        label.fontSize = 64
-        label.fontColor = .white
+        label.fontSize = 44
+        label.fontColor = SKColor(white: 0.95, alpha: 1)
         label.text = "GAME OVER"
-        label.position = CGPoint(x: size.width / 2, y: size.height / 2 + 80)
-        label.zPosition = 200
+        label.position = CGPoint(x: size.width / 2, y: size.height / 2 + 72)
+        label.zPosition = 201
         addChild(label)
 
         let sub = SKLabelNode(fontNamed: "Avenir")
-        sub.fontSize = 32
-        sub.fontColor = .gray
+        sub.fontSize = 22
+        sub.fontColor = SKColor(white: 0.7, alpha: 1)
         sub.text = "Score: \(score)"
-        sub.position = CGPoint(x: size.width / 2, y: size.height / 2 + 10)
-        sub.zPosition = 200
+        sub.position = CGPoint(x: size.width / 2, y: size.height / 2 + 18)
+        sub.zPosition = 201
         addChild(sub)
 
         let highLabel = SKLabelNode(fontNamed: "Avenir-Bold")
-        highLabel.fontSize = 28
-        highLabel.fontColor = .yellow
+        highLabel.fontSize = 20
+        highLabel.fontColor = SKColor(red: 0.95, green: 0.75, blue: 0.35, alpha: 1)  // warm, past bij splash
         highLabel.text = "High Score: \(highscore)"
-        highLabel.position = CGPoint(x: size.width / 2, y: size.height / 2 - 50)
-        highLabel.zPosition = 200
+        highLabel.position = CGPoint(x: size.width / 2, y: size.height / 2 - 32)
+        highLabel.zPosition = 201
         addChild(highLabel)
 
-        let restartBg = SKSpriteNode(color: SKColor(red: 0.2, green: 0.6, blue: 0.2, alpha: 1), size: CGSize(width: 220, height: 56))
-        restartBg.position = CGPoint(x: size.width / 2, y: size.height / 2 - 130)
-        restartBg.zPosition = 200
+        // Restart-knop:zelfde stijl als healthbar-groen / bovenbalk
+        let btnW: CGFloat = 200
+        let btnH: CGFloat = 48
+        let restartBg = SKSpriteNode(color: SKColor(red: 0.18, green: 0.5, blue: 0.22, alpha: 1), size: CGSize(width: btnW, height: btnH))
+        restartBg.position = CGPoint(x: size.width / 2, y: size.height / 2 - 108)
+        restartBg.zPosition = 201
         restartBg.name = "restartButton"
         addChild(restartBg)
 
         let restartLabel = SKLabelNode(fontNamed: "Avenir-Bold")
-        restartLabel.fontSize = 32
-        restartLabel.fontColor = .white
-        restartLabel.text = "RESTART"
+        restartLabel.fontSize = 24
+        restartLabel.fontColor = SKColor(white: 0.95, alpha: 1)
+        restartLabel.text = "Opnieuw"
         restartLabel.verticalAlignmentMode = .center
-        restartLabel.position = CGPoint(x: size.width / 2, y: size.height / 2 - 130)
-        restartLabel.zPosition = 201
+        restartLabel.position = CGPoint(x: size.width / 2, y: size.height / 2 - 108)
+        restartLabel.zPosition = 202
         restartLabel.name = "restartButton"
         addChild(restartLabel)
     }
