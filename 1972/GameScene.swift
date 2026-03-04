@@ -309,14 +309,17 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             if planets.position.y < -spaceContentH { planets.position.y += spaceContentH }
         }
 
-        // Move player (horizontaal + verticaal)
+        // Move player: vliegtuig net boven de vinger, zodat healthbar zichtbaar blijft
         if let loc = touchLocation {
             let halfW = player.size.width / 2
             let halfH = player.size.height / 2
+            let healthBarH: CGFloat = 3 + 4  // bar hoogte + marge onder vliegtuig
+            let fingerOffset = halfH + healthBarH + 22  // vinger zit onder vliegtuig + healthbar
             let minY: CGFloat = 80
             let maxY = size.height - 60  // onder de bovenbalk
             player.position.x = max(halfW, min(size.width - halfW, loc.x))
-            player.position.y = max(minY + halfH, min(maxY - halfH, loc.y))
+            let desiredY = loc.y + fingerOffset
+            player.position.y = max(minY + halfH, min(maxY - halfH, desiredY))
         }
 
         // Laser: beam bijhouden en vijanden in straal raken
