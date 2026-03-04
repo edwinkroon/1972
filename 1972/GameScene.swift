@@ -191,8 +191,8 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
 
         let ship = SKSpriteNode(imageNamed: "playerShip")
         ship.zRotation = -15 * .pi / 180  // 15° gedraaid
-        ship.setScale(0.55)
-        ship.position = CGPoint(x: 0, y: -15)
+        ship.setScale(1.1)
+        ship.position = CGPoint(x: 0, y: 55)
         ship.zPosition = 1001
         splash.addChild(ship)
 
