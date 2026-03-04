@@ -125,7 +125,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         lives = 3
         heartNodes.removeAll()
         let heartSize: CGFloat = 20
-        let heartSpacing: CGFloat = 26
+        let heartSpacing: CGFloat = 16
         let edgeMargin: CGFloat = 14
         for i in 0..<3 {
             let heart = makeHeartNode(size: heartSize)
@@ -186,6 +186,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         let ship = SKSpriteNode(imageNamed: "playerShip")
         let scale = size / max(ship.size.width, ship.size.height)
         ship.setScale(scale)
+        ship.zRotation = -15 * .pi / 180  // 15° naar rechts
         return ship
     }
 
