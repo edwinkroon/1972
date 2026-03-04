@@ -348,11 +348,8 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
                 }
             } else {
                 rocket.userData?["target"] = nil
-                // Geen vijand: vlieg recht door in de richting waarin de raket wijst
-                let dirX = -sin(rocket.zRotation)
-                let dirY = cos(rocket.zRotation)
-                rocket.position.x += dirX * self.rocketSpeed * CGFloat(dt)
-                rocket.position.y += dirY * self.rocketSpeed * CGFloat(dt)
+                // Geen vijand: vlieg recht omhoog (niet naar de zijkant)
+                rocket.position.y += self.rocketSpeed * CGFloat(dt)
             }
             if rocket.position.y > self.size.height + 60 || rocket.position.y < -60 {
                 rocket.removeFromParent()
