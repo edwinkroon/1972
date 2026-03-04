@@ -260,6 +260,27 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             if waveIndex >= 1 && Bool.random() { spawnEnemy() }
             if waveIndex >= 2 && Bool.random() { spawnEnemy() }
         }
+
+        // Handmatige hit: kogel vs vijand – kogel stopt bij eerste treffer (gaat niet door)
+        var hits: [(bullet: SKNode, enemy: SKNode)] = []
+        enumerateChildNodes(withName: "playerBullet") { bullet, _ in
+            var bulletHit = false
+            self.enumerateChildNodes(withName: "enemy") { enemy, _ in
+                if !bulletHit && bullet.frame.intersects(enemy.frame) {
+                    hits.append((bullet, enemy))
+                    bulletHit = true  // één kogel = één treffer, daarna stopt de kogel
+                }
+            }
+        }
+        for (bullet, enemy) in hits {
+            let pos = enemy.position
+            bullet.removeAllActions()
+            bullet.removeFromParent()  // kogel verdwijnt direct, vliegt niet door
+            enemy.removeFromParent()
+            addExplosion(at: pos)
+            addScore(10)
+            trySpawnPowerup(at: pos)
+        }
     }
 
     private func firePlayerBullet() {
@@ -288,7 +309,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         bullet.physicsBody?.collisionBitMask = 0
         bullet.zPosition = 15
         addChild(bullet)
-        let move = SKAction.moveTo(y: size.height + bullet.size.height, duration: 0.6)
+        let move = SKAction.moveTo(y: size.height + bullet.size.height, duration: 1.0)
         bullet.run(SKAction.sequence([move, SKAction.removeFromParent()]))
     }
 
@@ -304,7 +325,9 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         bullet.physicsBody?.collisionBitMask = 0
         bullet.zPosition = 15
         addChild(bullet)
-        let move = SKAction.moveTo(y: -bullet.size.height, duration: 2.0)
+        // Vijandkogel omlaag naar speler. Was: negatieve dy; als ze verkeerd gaan, wissel naar dy = -(size.height + 100)
+        let dy: CGFloat = (size.height + 100)
+        let move = SKAction.moveBy(x: 0, y: dy, duration: 2.0)
         bullet.run(SKAction.sequence([move, SKAction.removeFromParent()]))
     }
 
@@ -403,11 +426,11 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             if lastUpdateTime >= invincibleUntil { playerHit() }
         }
 
-        // Player vs Enemy (ram)
+        // Player vs Enemy (ram) – tegenstander raakt je = direct dood
         if (maskA == categoryPlayer && maskB == categoryEnemy) || (maskA == categoryEnemy && maskB == categoryPlayer) {
             let enemy = maskA == categoryEnemy ? bodyA.node : bodyB.node
             enemy?.removeFromParent()
-            if lastUpdateTime >= invincibleUntil { playerHit() }
+            triggerGameOver()
         }
     }
 
