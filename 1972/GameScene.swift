@@ -29,7 +29,7 @@ private let spreadShotDuration: TimeInterval = 10.0
 private let spreadShotAngleDegrees: CGFloat = 20
 private let laserDuration: TimeInterval = 8.0
 private let wingmanDuration: TimeInterval = 12.0
-private let wingmanOffset: CGFloat = 42  // afstand links/rechts van speler
+private let wingmanOffset: CGFloat = 58  // afstand links/rechts van speler
 private let rocketDuration: TimeInterval = 12.0
 private let rocketFireInterval: TimeInterval = 0.6
 private let maxRockets = 3
@@ -986,14 +986,15 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             if lastUpdateTime >= invincibleUntil { playerHitByBullet() }
         }
 
-        // Player vs Enemy (ram) – vliegtuig raakt je = direct dood
+        // Player vs Enemy (ram) – vliegtuig raakt je = één leven eraf (na 3x game over)
         if (maskA == categoryPlayer && maskB == categoryEnemy) || (maskA == categoryEnemy && maskB == categoryPlayer) {
             let enemy = maskA == categoryEnemy ? bodyA.node : bodyB.node
             let pos = enemy?.position ?? .zero
             let color = debrisColor(for: enemy)
             enemy?.removeFromParent()
             addEnemyDebris(at: pos, color: color)
-            triggerGameOver()
+            invincibleUntil = lastUpdateTime + invincibilityDuration
+            loseOneLife()
         }
     }
 
@@ -1003,16 +1004,21 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         playerHealth -= 20
         playerHealthBar?.xScale = max(0, playerHealth / 100)
         if playerHealth <= 0 {
-            lives -= 1
-            playerHealth = 100
-            playerHealthBar?.xScale = 1.0
-            if lives >= 0 && lives < heartNodes.count {
-                heartNodes[lives].run(SKAction.sequence([SKAction.fadeOut(withDuration: 0.2), SKAction.removeFromParent()]))
-                heartNodes.remove(at: lives)
-            }
-            if lives <= 0 {
-                triggerGameOver()
-            }
+            loseOneLife()
+        }
+    }
+
+    /// Eén leven (vliegtuigje) eraf; health reset; bij 0 levens pas game over.
+    private func loseOneLife() {
+        lives -= 1
+        playerHealth = 100
+        playerHealthBar?.xScale = 1.0
+        if lives >= 0 && lives < heartNodes.count {
+            heartNodes[lives].run(SKAction.sequence([SKAction.fadeOut(withDuration: 0.2), SKAction.removeFromParent()]))
+            heartNodes.remove(at: lives)
+        }
+        if lives <= 0 {
+            triggerGameOver()
         }
     }
 
