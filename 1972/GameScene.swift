@@ -173,8 +173,9 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     }
 
     private func setupScrollingGradient() {
-        let w = max(size.width, 1)
-        let h = max(size.height * 2, 1)
+        let maxTexDim: CGFloat = 2048
+        let w = min(max(size.width, 1), maxTexDim)
+        let h = min(max(size.height * 2, 1), maxTexDim)
         let texture = makeGradientTexture(width: w, height: h)
         gradientSprite1 = SKSpriteNode(texture: texture, size: CGSize(width: w, height: h))
         gradientSprite1.position = CGPoint(x: size.width / 2, y: size.height)
@@ -184,8 +185,9 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     }
 
     private func makeGradientTexture(width: CGFloat, height: CGFloat) -> SKTexture {
-        let w = max(width, 1)
-        let h = max(height, 1)
+        let maxTexDim: CGFloat = 2048
+        let w = min(max(width, 1), maxTexDim)
+        let h = min(max(height, 1), maxTexDim)
         let renderer = UIGraphicsImageRenderer(size: CGSize(width: w, height: h))
         let image = renderer.image { ctx in
             // Veel kleurstops = geleidelijke overgang lichter/donkerder, geen harde overgang
