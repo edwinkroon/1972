@@ -18,7 +18,7 @@ private let categoryPowerup:      UInt32 = 0x1 << 4
 private let categoryPlayerRocket: UInt32 = 0x1 << 5
 
 private let highscoreKey = "highscore1972"
-private let maxPlayerBullets = 5
+private let maxPlayerBullets = 25  // genoeg dat vuren niet stopt zolang je het scherm vasthoudt
 private let playerBulletSize = CGSize(width: 14, height: 24)
 private let playerFireInterval: TimeInterval = 0.12
 private let enemyBulletSize = CGSize(width: 8, height: 16)
@@ -254,7 +254,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         // Player fire – single or triple shot
         if touchLocationX != nil, currentTime - lastPlayerFireTime >= playerFireInterval {
             let count = children.filter { $0.name == "playerBullet" }.count
-            let limit = currentTime < tripleShotUntil ? maxPlayerBullets + 10 : maxPlayerBullets
+            let limit = currentTime < tripleShotUntil ? maxPlayerBullets + 20 : maxPlayerBullets
             if count < limit {
                 lastPlayerFireTime = currentTime
                 if currentTime < tripleShotUntil {
@@ -389,9 +389,11 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
 
     private func fireRocket() {
         let rocket = SKSpriteNode(imageNamed: "rocket")
+        rocket.zRotation = .pi / 2  // kwartslag omhoog, net als bullets (eerst draaien voorkomt crop)
+        // Na 90°: texture-breedte = lengte omhoog, dus offset = size.width/2
         rocket.position = CGPoint(
             x: player.position.x,
-            y: player.position.y + player.size.height / 2 + rocket.size.height / 2
+            y: player.position.y + player.size.height / 2 + rocket.size.width / 2
         )
         rocket.name = "playerRocket"
         rocket.physicsBody = SKPhysicsBody(rectangleOf: rocket.size)
