@@ -22,12 +22,14 @@ private let maxPlayerBullets = 25  // genoeg dat vuren niet stopt zolang je het 
 private let playerBulletSize = CGSize(width: 4, height: 6)   // 50% kleiner (was 7x12)
 private let playerFireInterval: TimeInterval = 0.12
 private let enemyBulletSize = CGSize(width: 2, height: 4)   // 50% kleiner (was 4x8)
-private let enemyFireInterval: TimeInterval = 3.0
+private let enemyFireInterval: TimeInterval = 1.0
 private let powerupDropChance: Float = 0.15
 private let tripleShotDuration: TimeInterval = 10.0
 private let spreadShotDuration: TimeInterval = 10.0
 private let spreadShotAngleDegrees: CGFloat = 20
 private let laserDuration: TimeInterval = 8.0
+private let wingmanDuration: TimeInterval = 12.0
+private let wingmanOffset: CGFloat = 42  // afstand links/rechts van speler
 private let rocketDuration: TimeInterval = 12.0
 private let rocketFireInterval: TimeInterval = 0.6
 private let maxRockets = 3
@@ -62,12 +64,17 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     private var gameStartTime: TimeInterval = 0
     private var waveIndex: Int = 0
     private var lives: Int = 3
+    private var playerHealth: CGFloat = 100   // per leven; kogel -20, bij 0 verlies je een leven
+    private var playerHealthBar: SKSpriteNode?  // groene balk onder het vliegtuig
     private var heartNodes: [SKNode] = []
     private var invincibleUntil: TimeInterval = 0
     private var tripleShotUntil: TimeInterval = 0
     private var spreadShotUntil: TimeInterval = 0
     private var laserUntil: TimeInterval = 0
     private var laserBeamNode: SKSpriteNode?
+    private var wingmanUntil: TimeInterval = 0
+    private var leftWingmanNode: SKSpriteNode?
+    private var rightWingmanNode: SKSpriteNode?
     private var rocketUntil: TimeInterval = 0
     private var lastRocketFireTime: TimeInterval = 0
     private var lastFormationSpawnTime: TimeInterval = 0
@@ -100,7 +107,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
 
         // Player – sprite uit Assets (playerShip)
         player = SKSpriteNode(imageNamed: "playerShip")
-        player.position = CGPoint(x: size.width / 2, y: 200)  // hoger zodat zichtbaar bij duimbesturing
+        player.position = CGPoint(x: size.width / 2, y: 165)  // iets lager op het scherm
         player.name = "player"
         player.physicsBody = SKPhysicsBody(rectangleOf: player.size)
         player.physicsBody?.isDynamic = false
@@ -109,6 +116,22 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         player.physicsBody?.collisionBitMask = 0
         player.zPosition = 20
         addChild(player)
+
+        // Healthbar onder het vliegtuig (even breed als het vliegtuig)
+        let barW = player.size.width
+        let barH: CGFloat = 5
+        let barY = -player.size.height / 2 - barH / 2 - 4
+        let bg = SKSpriteNode(color: SKColor(white: 0.2, alpha: 0.9), size: CGSize(width: barW, height: barH))
+        bg.position = CGPoint(x: 0, y: barY)
+        bg.zPosition = -1
+        player.addChild(bg)
+        let fill = SKSpriteNode(color: SKColor(red: 0.2, green: 0.85, blue: 0.3, alpha: 1), size: CGSize(width: barW, height: barH))
+        fill.anchorPoint = CGPoint(x: 0, y: 0.5)
+        fill.position = CGPoint(x: -barW / 2, y: barY)
+        fill.zPosition = 0
+        fill.xScale = 1.0
+        player.addChild(fill)
+        playerHealthBar = fill
 
         // Bovenbalk: levens links, score rechts
         let barHeight: CGFloat = 44
@@ -123,9 +146,10 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
 
         // Levens – hartjes links uitgelijnd
         lives = 3
+        playerHealth = 100
         heartNodes.removeAll()
         let heartSize: CGFloat = 20
-        let heartSpacing: CGFloat = 16
+        let heartSpacing: CGFloat = 10
         let edgeMargin: CGFloat = 14
         for i in 0..<3 {
             let heart = makeHeartNode(size: heartSize)
@@ -299,10 +323,19 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             laserBeamNode = nil
         }
 
+        // Wingmen: opruimen als powerup is afgelopen
+        if currentTime >= wingmanUntil {
+            leftWingmanNode?.removeFromParent()
+            rightWingmanNode?.removeFromParent()
+            leftWingmanNode = nil
+            rightWingmanNode = nil
+        }
+
         // Player fire – single, triple, spread (niet tijdens laser)
         if touchLocationX != nil, currentTime >= laserUntil, currentTime - lastPlayerFireTime >= playerFireInterval {
             let count = children.filter { $0.name == "playerBullet" }.count
-            let limit = currentTime < tripleShotUntil ? maxPlayerBullets + 20 : maxPlayerBullets
+            var limit = currentTime < tripleShotUntil ? maxPlayerBullets + 20 : maxPlayerBullets
+            if currentTime < wingmanUntil { limit += 20 }
             if count < limit {
                 lastPlayerFireTime = currentTime
                 if currentTime < tripleShotUntil {
@@ -312,6 +345,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
                 } else {
                     firePlayerBullet()
                 }
+                if currentTime < wingmanUntil { fireWingmanBullets() }
             }
         }
 
@@ -494,6 +528,12 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
                 self.activateLaser()
             }
         }
+        enumerateChildNodes(withName: "powerupWingman") { pw, _ in
+            if self.player.parent != nil && pw.frame.intersects(self.player.frame) {
+                pw.removeFromParent()
+                self.activateWingmen()
+            }
+        }
     }
 
     private func firePlayerBullet() {
@@ -501,7 +541,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     }
 
     private func fireTripleShot() {
-        let dx: CGFloat = 25
+        let dx: CGFloat = 38
         addBullet(at: player.position, offsetX: -dx, imageName: "bullet2")   // links
         addBullet(at: player.position, offsetX: 0, imageName: "bullet1")    // midden (default)
         addBullet(at: player.position, offsetX: dx, imageName: "bullet3")    // rechts
@@ -718,7 +758,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     private func trySpawnPowerup(at position: CGPoint) {
         if Float.random(in: 0...1) > powerupDropChance { return }
         let pwSize = CGSize(width: 32, height: 32)
-        let choice = Int.random(in: 0..<4)  // 0=triple, 1=spread, 2=rocket, 3=laser
+        let choice = Int.random(in: 0..<5)  // 0=triple, 1=spread, 2=rocket, 3=laser, 4=wingman
         let pw: SKSpriteNode
         let name: String
         switch choice {
@@ -731,9 +771,12 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         case 2:
             pw = SKSpriteNode(imageNamed: "powerup4")
             name = "powerupRocket"
-        default:
+        case 3:
             pw = SKSpriteNode(imageNamed: "powerup3")
             name = "powerupLaser"
+        default:
+            pw = SKSpriteNode(imageNamed: "powerup5")
+            name = "powerupWingman"
         }
         if pw.texture != nil {
             pw.size = pwSize
@@ -749,6 +792,34 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         addChild(pw)
         let move = SKAction.moveTo(y: -pw.size.height, duration: 6)
         pw.run(SKAction.sequence([move, SKAction.removeFromParent()]))
+    }
+
+    private func activateWingmen() {
+        wingmanUntil = lastUpdateTime + wingmanDuration
+        if leftWingmanNode == nil, let pl = player {
+            let scale: CGFloat = 0.45
+            let left = SKSpriteNode(imageNamed: "playerShip")
+            left.setScale(scale)
+            left.position = CGPoint(x: -wingmanOffset, y: 0)
+            left.zPosition = -2
+            left.name = "wingmanLeft"
+            pl.addChild(left)
+            leftWingmanNode = left
+            let right = SKSpriteNode(imageNamed: "playerShip")
+            right.setScale(scale)
+            right.position = CGPoint(x: wingmanOffset, y: 0)
+            right.zPosition = -2
+            right.name = "wingmanRight"
+            pl.addChild(right)
+            rightWingmanNode = right
+        }
+    }
+
+    private func fireWingmanBullets() {
+        let leftPos = CGPoint(x: player.position.x - wingmanOffset, y: player.position.y)
+        let rightPos = CGPoint(x: player.position.x + wingmanOffset, y: player.position.y)
+        addBullet(at: leftPos, offsetX: 0, imageName: "bullet1")
+        addBullet(at: rightPos, offsetX: 0, imageName: "bullet1")
     }
 
     private func activateLaser() {
@@ -880,19 +951,21 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
                 spreadShotUntil = lastUpdateTime + spreadShotDuration
             } else if name == "powerupLaser" {
                 activateLaser()
+            } else if name == "powerupWingman" {
+                activateWingmen()
             } else {
                 tripleShotUntil = lastUpdateTime + tripleShotDuration
             }
         }
 
-        // Enemy bullet vs Player – lose life
+        // Enemy bullet vs Player – 20% health schade per kogel
         if (maskA == categoryEnemyBullet && maskB == categoryPlayer) || (maskA == categoryPlayer && maskB == categoryEnemyBullet) {
             let bullet = maskA == categoryEnemyBullet ? bodyA.node : bodyB.node
             bullet?.removeFromParent()
-            if lastUpdateTime >= invincibleUntil { playerHit() }
+            if lastUpdateTime >= invincibleUntil { playerHitByBullet() }
         }
 
-        // Player vs Enemy (ram) – tegenstander raakt je = direct dood
+        // Player vs Enemy (ram) – vliegtuig raakt je = direct dood
         if (maskA == categoryPlayer && maskB == categoryEnemy) || (maskA == categoryEnemy && maskB == categoryPlayer) {
             let enemy = maskA == categoryEnemy ? bodyA.node : bodyB.node
             let pos = enemy?.position ?? .zero
@@ -903,15 +976,22 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         }
     }
 
-    private func playerHit() {
+    /// Kogel raakt speler: 20% health eraf; bij 0 verlies je een leven.
+    private func playerHitByBullet() {
         invincibleUntil = lastUpdateTime + invincibilityDuration
-        lives -= 1
-        if lives >= 0 && lives < heartNodes.count {
-            heartNodes[lives].run(SKAction.sequence([SKAction.fadeOut(withDuration: 0.2), SKAction.removeFromParent()]))
-            heartNodes.remove(at: lives)
-        }
-        if lives <= 0 {
-            triggerGameOver()
+        playerHealth -= 20
+        playerHealthBar?.xScale = max(0, playerHealth / 100)
+        if playerHealth <= 0 {
+            lives -= 1
+            playerHealth = 100
+            playerHealthBar?.xScale = 1.0
+            if lives >= 0 && lives < heartNodes.count {
+                heartNodes[lives].run(SKAction.sequence([SKAction.fadeOut(withDuration: 0.2), SKAction.removeFromParent()]))
+                heartNodes.remove(at: lives)
+            }
+            if lives <= 0 {
+                triggerGameOver()
+            }
         }
     }
 
