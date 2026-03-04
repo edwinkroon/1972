@@ -68,7 +68,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
 
         // Player – sprite uit Assets (playerShip)
         player = SKSpriteNode(imageNamed: "playerShip")
-        player.position = CGPoint(x: size.width / 2, y: 80)
+        player.position = CGPoint(x: size.width / 2, y: 200)  // hoger zodat zichtbaar bij duimbesturing
         player.name = "player"
         player.physicsBody = SKPhysicsBody(rectangleOf: player.size)
         player.physicsBody?.isDynamic = false
@@ -282,6 +282,14 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             addScore(10)
             trySpawnPowerup(at: pos)
         }
+
+        // Handmatige powerup-pickup (physics contact mist vaak)
+        enumerateChildNodes(withName: "powerup") { pw, _ in
+            if self.player.parent != nil && pw.frame.intersects(self.player.frame) {
+                pw.removeFromParent()
+                self.tripleShotUntil = self.lastUpdateTime + tripleShotDuration
+            }
+        }
     }
 
     private func firePlayerBullet() {
@@ -360,7 +368,8 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
 
     private func trySpawnPowerup(at position: CGPoint) {
         if Float.random(in: 0...1) > powerupDropChance { return }
-        let pw = SKSpriteNode(color: .cyan, size: CGSize(width: 24, height: 24))
+        let pwSize = CGSize(width: 32, height: 32)  // iets groter = makkelijker oppakken
+        let pw = SKSpriteNode(color: .cyan, size: pwSize)
         pw.position = position
         pw.name = "powerup"
         pw.physicsBody = SKPhysicsBody(rectangleOf: pw.size)
