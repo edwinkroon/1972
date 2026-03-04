@@ -619,18 +619,26 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         let halfW = scaledW / 2
         let minX = halfW
         let maxX = size.width - halfW
-        let gap: CGFloat = 28
+        let gap: CGFloat = 40
         var existing: [(x: CGFloat, halfW: CGFloat)] = []
         enumerateChildNodes(withName: "enemy") { node, _ in
-            let w = node.frame.width
+            let w: CGFloat
+            if let sprite = node as? SKSpriteNode {
+                w = sprite.size.width * abs(sprite.xScale)
+            } else {
+                w = node.frame.width
+            }
             existing.append((node.position.x, w / 2))
         }
-        var x: CGFloat = maxX >= minX ? CGFloat.random(in: minX...maxX) : size.width / 2
-        for _ in 0..<25 {
-            let ok = existing.allSatisfy { abs(x - $0.x) >= halfW + $0.halfW + gap }
-            if ok { break }
-            x = maxX >= minX ? CGFloat.random(in: minX...maxX) : size.width / 2
+        let step: CGFloat = 25
+        var validX: [CGFloat] = []
+        var cx = minX
+        while cx <= maxX {
+            let ok = existing.allSatisfy { abs(cx - $0.x) >= halfW + $0.halfW + gap }
+            if ok { validX.append(cx) }
+            cx += step
         }
+        guard let x = validX.randomElement() else { return }
         enemy.position = CGPoint(x: x, y: size.height + scaledH)
         enemy.name = "enemy"
         enemy.physicsBody = SKPhysicsBody(rectangleOf: CGSize(width: scaledW, height: scaledH))
