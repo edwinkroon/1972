@@ -189,6 +189,13 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         title.zPosition = 1001
         splash.addChild(title)
 
+        let ship = SKSpriteNode(imageNamed: "playerShip")
+        ship.zRotation = -15 * .pi / 180  // 15° gedraaid
+        ship.setScale(0.55)
+        ship.position = CGPoint(x: 0, y: -15)
+        ship.zPosition = 1001
+        splash.addChild(ship)
+
         let sub = SKLabelNode(fontNamed: "Avenir")
         sub.text = "Tap to start"
         sub.fontSize = 28
