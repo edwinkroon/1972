@@ -107,7 +107,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
 
         // Player – sprite uit Assets (playerShip)
         player = SKSpriteNode(imageNamed: "playerShip")
-        player.position = CGPoint(x: size.width / 2, y: 165)  // iets lager op het scherm
+        player.position = CGPoint(x: size.width / 2, y: 220)  // default wat hoger van de onderkant
         player.name = "player"
         player.physicsBody = SKPhysicsBody(rectangleOf: player.size)
         player.physicsBody?.isDynamic = false
