@@ -406,10 +406,10 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
 
     private func addBullet(at basePos: CGPoint, offsetX: CGFloat, imageName: String = "bullet1") {
         let bullet = SKSpriteNode(imageNamed: imageName)
-        // Zelfde grootte voor enkele en triple-shot kogels
-        bullet.xScale = playerBulletSize.width / bullet.size.width
-        bullet.yScale = playerBulletSize.height / bullet.size.height
-        bullet.zRotation = .pi / 2  // kwartslag zodat kogel naar boven wijst
+        bullet.zRotation = .pi / 2  // eerst draaien, daarna schalen voorkomt crop in oud frame
+        // Na 90°: texture-breedte wordt scherm-hoogte (lengte kogel), texture-hoogte wordt scherm-breedte
+        bullet.xScale = playerBulletSize.height / bullet.size.width   // lengte omhoog
+        bullet.yScale = playerBulletSize.width / bullet.size.height  // dikte
         bullet.position = CGPoint(
             x: basePos.x + offsetX,
             y: basePos.y + player.size.height / 2 + playerBulletSize.height / 2
