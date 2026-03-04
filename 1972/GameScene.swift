@@ -612,7 +612,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
 
     private func spawnEnemy() {
         let enemy = SKSpriteNode(imageNamed: "enemy1")
-        let scale: CGFloat = 0.8  // 20% kleiner
+        let scale: CGFloat = 0.5  // 50% kleiner
         enemy.setScale(scale)
         let scaledW = enemy.size.width * scale
         let scaledH = enemy.size.height * scale
