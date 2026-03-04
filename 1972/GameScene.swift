@@ -74,12 +74,14 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     private var lastUpdateTime: TimeInterval = 0
     private var backgroundNode: SKNode!
     private var cloudNode: SKNode!
+    private var spaceParallaxNode: SKNode!
+    private let spaceParallaxSpeed: CGFloat = 12.0
     private var gradientSprite1: SKSpriteNode!
     private var gradientSprite2: SKSpriteNode!
     private var splashNode: SKNode?
 
     override func didMove(to view: SKView) {
-        backgroundColor = SKColor(red: 0.2, green: 0.4, blue: 0.7, alpha: 1)
+        backgroundColor = SKColor(red: 0.06, green: 0.08, blue: 0.18, alpha: 1)
 
         // Splash direct tonen zodat je ziet dat de scene start (ook bij zwart scherm)
         showSplash()
@@ -92,8 +94,11 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         waveIndex = 0
         spawnInterval = 2.0
 
-        // Scrollende blauwe gradient background
+        // Scrollende donkerblauwe gradient background
         setupScrollingGradient()
+
+        // Sterren en planeten met parallax (licht, weinig nodes)
+        setupSpaceParallax()
 
         // Wolken parallax
         setupClouds()
@@ -212,15 +217,15 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         let image = renderer.image { ctx in
             // Zelfde kleur aan begin en eind + extra stops aan randen = naadloze loop, minder banding
             let colors = [
-                UIColor(red: 0.22, green: 0.42, blue: 0.72, alpha: 1).cgColor,
-                UIColor(red: 0.22, green: 0.42, blue: 0.72, alpha: 1).cgColor,
-                UIColor(red: 0.26, green: 0.46, blue: 0.78, alpha: 1).cgColor,
-                UIColor(red: 0.32, green: 0.52, blue: 0.82, alpha: 1).cgColor,
-                UIColor(red: 0.36, green: 0.56, blue: 0.88, alpha: 1).cgColor,
-                UIColor(red: 0.32, green: 0.52, blue: 0.82, alpha: 1).cgColor,
-                UIColor(red: 0.26, green: 0.46, blue: 0.78, alpha: 1).cgColor,
-                UIColor(red: 0.22, green: 0.42, blue: 0.72, alpha: 1).cgColor,
-                UIColor(red: 0.22, green: 0.42, blue: 0.72, alpha: 1).cgColor
+                UIColor(red: 0.06, green: 0.09, blue: 0.2, alpha: 1).cgColor,
+                UIColor(red: 0.06, green: 0.09, blue: 0.2, alpha: 1).cgColor,
+                UIColor(red: 0.08, green: 0.12, blue: 0.28, alpha: 1).cgColor,
+                UIColor(red: 0.1, green: 0.14, blue: 0.32, alpha: 1).cgColor,
+                UIColor(red: 0.12, green: 0.16, blue: 0.38, alpha: 1).cgColor,
+                UIColor(red: 0.1, green: 0.14, blue: 0.32, alpha: 1).cgColor,
+                UIColor(red: 0.08, green: 0.12, blue: 0.28, alpha: 1).cgColor,
+                UIColor(red: 0.06, green: 0.09, blue: 0.2, alpha: 1).cgColor,
+                UIColor(red: 0.06, green: 0.09, blue: 0.2, alpha: 1).cgColor
             ]
             let locations: [CGFloat] = [0, 0.02, 0.2, 0.4, 0.5, 0.6, 0.8, 0.98, 1.0]
             let colorSpace = CGColorSpaceCreateDeviceRGB()
@@ -258,6 +263,40 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         group.name = "cloud"
         group.setScale(scale)
         return group
+    }
+
+    /// Donkerblauwe ruimte met subtiele sterren en planeten; parallax door langzamere scroll.
+    private func setupSpaceParallax() {
+        spaceParallaxNode = SKNode()
+        spaceParallaxNode.zPosition = -11
+        let w = size.width
+        let h = size.height * 2.2
+        let starCount = 28
+        let planetCount = 6
+        for _ in 0..<starCount {
+            let r = CGFloat.random(in: 0.8...2.2)
+            let star = SKShapeNode(circleOfRadius: r)
+            star.fillColor = SKColor(white: 1, alpha: CGFloat.random(in: 0.15...0.45))
+            star.strokeColor = .clear
+            star.position = CGPoint(x: CGFloat.random(in: 0...w), y: CGFloat.random(in: 0...h))
+            star.name = "spaceStar"
+            spaceParallaxNode.addChild(star)
+        }
+        let planetColors: [(r: CGFloat, g: CGFloat, b: CGFloat)] = [
+            (0.12, 0.14, 0.28), (0.1, 0.1, 0.22), (0.14, 0.1, 0.2), (0.08, 0.12, 0.25), (0.15, 0.12, 0.28), (0.09, 0.11, 0.2)
+        ]
+        for i in 0..<planetCount {
+            let radius = CGFloat.random(in: 5...14)
+            let c = planetColors[i % planetColors.count]
+            let planet = SKShapeNode(circleOfRadius: radius)
+            planet.fillColor = SKColor(red: c.r, green: c.g, blue: c.b, alpha: CGFloat.random(in: 0.2...0.4))
+            planet.strokeColor = .clear
+            planet.position = CGPoint(x: CGFloat.random(in: 0...w), y: CGFloat.random(in: 0...h))
+            planet.name = "spacePlanet"
+            spaceParallaxNode.addChild(planet)
+        }
+        spaceParallaxNode.position = .zero
+        addChild(spaceParallaxNode)
     }
 
     override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
@@ -321,6 +360,12 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             }
         }
         if cloudNode.position.y < -size.height { cloudNode.position.y += size.height }
+
+        // Parallax sterren/planeten (langzamer dan gradient = diepte)
+        if let space = spaceParallaxNode {
+            space.position.y -= spaceParallaxSpeed * CGFloat(dt)
+            if space.position.y < -size.height { space.position.y += size.height }
+        }
 
         // Move player
         if let x = touchLocationX {
