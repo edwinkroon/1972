@@ -19,9 +19,9 @@ private let categoryPlayerRocket: UInt32 = 0x1 << 5
 
 private let highscoreKey = "highscore1972"
 private let maxPlayerBullets = 25  // genoeg dat vuren niet stopt zolang je het scherm vasthoudt
-private let playerBulletSize = CGSize(width: 4, height: 6)   // 50% kleiner (was 7x12)
+private let playerBulletSize = CGSize(width: 5, height: 7.5)   // 25% groter dan 4x6
 private let playerFireInterval: TimeInterval = 0.12
-private let enemyBulletSize = CGSize(width: 2, height: 4)   // 50% kleiner (was 4x8)
+private let enemyBulletSize = CGSize(width: 2.5, height: 5)   // 25% groter dan 2x4
 private let enemyFireInterval: TimeInterval = 1.0
 private let powerupDropChance: Float = 0.15
 private let tripleShotDuration: TimeInterval = 10.0
@@ -114,12 +114,13 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         player.physicsBody?.categoryBitMask = categoryPlayer
         player.physicsBody?.contactTestBitMask = categoryEnemy | categoryEnemyBullet | categoryPowerup
         player.physicsBody?.collisionBitMask = 0
+        player.physicsBody?.usesPreciseCollisionDetection = true
         player.zPosition = 20
         addChild(player)
 
         // Healthbar onder het vliegtuig (even breed als het vliegtuig)
         let barW = player.size.width
-        let barH: CGFloat = 5
+        let barH: CGFloat = 3
         let barY = -player.size.height / 2 - barH / 2 - 4
         let bg = SKSpriteNode(color: SKColor(white: 0.2, alpha: 0.9), size: CGSize(width: barW, height: barH))
         bg.position = CGPoint(x: 0, y: barY)
@@ -534,6 +535,25 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
                 self.activateWingmen()
             }
         }
+
+        // Handmatige hit: vijandkogel / vliegtuig vs speler (fallback als physics contact mist)
+        guard player.parent != nil, !gameOver else { return }
+        enumerateChildNodes(withName: "enemyBullet") { bullet, _ in
+            if bullet.frame.intersects(self.player.frame), self.lastUpdateTime >= self.invincibleUntil {
+                bullet.removeFromParent()
+                self.playerHitByBullet()
+            }
+        }
+        enumerateChildNodes(withName: "enemy") { enemy, _ in
+            if enemy.frame.intersects(self.player.frame) {
+                let pos = enemy.position
+                let color = self.debrisColor(for: enemy)
+                enemy.removeFromParent()
+                self.addEnemyDebris(at: pos, color: color)
+                self.triggerGameOver()
+                return  // stop meteen na game over
+            }
+        }
     }
 
     private func firePlayerBullet() {
@@ -618,6 +638,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         bullet.physicsBody?.categoryBitMask = categoryEnemyBullet
         bullet.physicsBody?.contactTestBitMask = categoryPlayer
         bullet.physicsBody?.collisionBitMask = 0
+        bullet.physicsBody?.usesPreciseCollisionDetection = true
         bullet.zPosition = 15
         addChild(bullet)
         let dy: CGFloat = size.height + 100
