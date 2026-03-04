@@ -28,13 +28,19 @@ private let tripleShotDuration: TimeInterval = 10.0
 private let rocketDuration: TimeInterval = 12.0
 private let rocketFireInterval: TimeInterval = 0.6
 private let maxRockets = 3
-private let rocketSpeed: CGFloat = 380
 private let bulletScore = 10
 private let rocketScore = 25
 private let invincibilityDuration: TimeInterval = 1.5
 private let waveDuration: TimeInterval = 30.0
 
 class GameScene: SKScene, SKPhysicsContactDelegate {
+
+    // Snelheden en tuning (instance properties voor gebruik in update/touches/closures)
+    private var rocketSpeed: CGFloat = 800.0
+    private var bulletSpeed: CGFloat = 600.0      // pixels/sec omhoog (bullet move duration afgeleid)
+    private var enemyBulletSpeed: CGFloat = 250.0
+    private var cloudScrollSpeed: CGFloat = 25.0
+    private var cloudParallaxSpeed: CGFloat = 15.0
 
     private var player: SKSpriteNode!
     private var scoreLabel: SKLabelNode!
@@ -231,10 +237,10 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         if gameOver { return }
 
         // Parallax clouds
-        cloudNode.position.y -= dt * 25
+        cloudNode.position.y -= dt * cloudScrollSpeed
         for child in cloudNode.children {
             if let cloud = child as? SKNode, cloud.name == "cloud" {
-                cloud.position.y -= dt * 15 * CGFloat(cloud.xScale)
+                cloud.position.y -= dt * cloudParallaxSpeed * CGFloat(cloud.xScale)
             }
         }
         if cloudNode.position.y < -size.height { cloudNode.position.y += size.height }
@@ -414,7 +420,9 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         bullet.physicsBody?.collisionBitMask = 0
         bullet.zPosition = 15
         addChild(bullet)
-        let move = SKAction.moveTo(y: size.height + bullet.size.height, duration: 1.0)
+        let distance = size.height + bullet.size.height - bullet.position.y
+        let duration = max(0.3, distance / bulletSpeed)
+        let move = SKAction.moveTo(y: size.height + bullet.size.height, duration: duration)
         bullet.run(SKAction.sequence([move, SKAction.removeFromParent()]))
     }
 
@@ -430,9 +438,9 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         bullet.physicsBody?.collisionBitMask = 0
         bullet.zPosition = 15
         addChild(bullet)
-        // Vijandkogel omlaag naar speler. Was: negatieve dy; als ze verkeerd gaan, wissel naar dy = -(size.height + 100)
-        let dy: CGFloat = (size.height + 100)
-        let move = SKAction.moveBy(x: 0, y: dy, duration: 2.0)
+        let dy: CGFloat = size.height + 100
+        let duration = max(0.5, dy / enemyBulletSpeed)
+        let move = SKAction.moveBy(x: 0, y: dy, duration: duration)
         bullet.run(SKAction.sequence([move, SKAction.removeFromParent()]))
     }
 
@@ -470,10 +478,11 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
 
     private func trySpawnPowerup(at position: CGPoint) {
         if Float.random(in: 0...1) > powerupDropChance { return }
-        let pwSize = CGSize(width: 32, height: 32)  // iets groter = makkelijker oppakken
-        let pw = SKSpriteNode(color: .cyan, size: pwSize)
+        let pwSize = CGSize(width: 32, height: 32)
+        let isRocketPowerup = Bool.random()
+        let pw = SKSpriteNode(color: isRocketPowerup ? .orange : .cyan, size: pwSize)
         pw.position = position
-        pw.name = "powerup"
+        pw.name = isRocketPowerup ? "powerupRocket" : "powerupTriple"
         pw.physicsBody = SKPhysicsBody(rectangleOf: pw.size)
         pw.physicsBody?.isDynamic = false
         pw.physicsBody?.categoryBitMask = categoryPowerup
@@ -519,15 +528,32 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             bullet?.removeFromParent()
             enemy?.removeFromParent()
             addExplosion(at: hitPos)
-            addScore(10)
+            addScore(bulletScore)
+            trySpawnPowerup(at: hitPos)
+        }
+
+        // Player rocket vs Enemy (meer damage)
+        if (maskA == categoryPlayerRocket && maskB == categoryEnemy) || (maskA == categoryEnemy && maskB == categoryPlayerRocket) {
+            let rocket = maskA == categoryPlayerRocket ? bodyA.node : bodyB.node
+            let enemy = maskA == categoryEnemy ? bodyA.node : bodyB.node
+            let hitPos = enemy?.position ?? rocket?.position ?? .zero
+            rocket?.removeFromParent()
+            enemy?.removeFromParent()
+            addExplosion(at: hitPos)
+            addScore(rocketScore)
             trySpawnPowerup(at: hitPos)
         }
 
         // Powerup vs Player
         if (maskA == categoryPowerup && maskB == categoryPlayer) || (maskA == categoryPlayer && maskB == categoryPowerup) {
             let pw = maskA == categoryPowerup ? bodyA.node : bodyB.node
+            let name = pw?.name ?? ""
             pw?.removeFromParent()
-            tripleShotUntil = lastUpdateTime + tripleShotDuration
+            if name == "powerupRocket" {
+                rocketUntil = lastUpdateTime + rocketDuration
+            } else {
+                tripleShotUntil = lastUpdateTime + tripleShotDuration
+            }
         }
 
         // Enemy bullet vs Player – lose life
