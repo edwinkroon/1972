@@ -407,6 +407,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
 
     private func addBullet(at basePos: CGPoint, offsetX: CGFloat, imageName: String = "bullet1") {
         let bullet = SKSpriteNode(imageNamed: imageName)
+        bullet.zRotation = .pi / 2  // kwartslag zodat kogel naar boven wijst
         bullet.position = CGPoint(
             x: basePos.x + offsetX,
             y: basePos.y + player.size.height / 2 + bullet.size.height / 2
@@ -428,10 +429,11 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
 
     private func fireEnemyBullet(from enemy: SKSpriteNode) {
         guard enemy.parent != nil else { return }
-        let bullet = SKSpriteNode(imageNamed: "bullet2")  // vijandkogel: andere bullet-asset
-        bullet.position = CGPoint(x: enemy.position.x, y: enemy.position.y - enemy.size.height / 2 - bullet.size.height / 2)
+        let alienBulletSize = CGSize(width: 10, height: 10)  // witte vierkantjes, later eigen asset
+        let bullet = SKSpriteNode(color: .white, size: alienBulletSize)
+        bullet.position = CGPoint(x: enemy.position.x, y: enemy.position.y - enemy.size.height / 2 - alienBulletSize.height / 2)
         bullet.name = "enemyBullet"
-        bullet.physicsBody = SKPhysicsBody(rectangleOf: bullet.size)  // size uit texture
+        bullet.physicsBody = SKPhysicsBody(rectangleOf: bullet.size)
         bullet.physicsBody?.isDynamic = false
         bullet.physicsBody?.categoryBitMask = categoryEnemyBullet
         bullet.physicsBody?.contactTestBitMask = categoryPlayer
@@ -440,7 +442,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         addChild(bullet)
         let dy: CGFloat = size.height + 100
         let duration = max(0.5, dy / enemyBulletSpeed)
-        let move = SKAction.moveBy(x: 0, y: dy, duration: duration)
+        let move = SKAction.moveBy(x: 0, y: -dy, duration: duration)  // omlaag naar speler
         bullet.run(SKAction.sequence([move, SKAction.removeFromParent()]))
     }
 
