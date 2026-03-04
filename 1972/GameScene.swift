@@ -49,7 +49,6 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     private var rocketSpeed: CGFloat = 400.0  // 50% langzamer (was 800)
     private var bulletSpeed: CGFloat = 600.0      // pixels/sec omhoog (bullet move duration afgeleid)
     private var enemyBulletSpeed: CGFloat = 250.0
-    private let gradientScrollSpeed: CGFloat = 30.0
 
     private var player: SKSpriteNode!
     private var scoreLabel: SKLabelNode!
@@ -75,8 +74,6 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     private var starParallaxNode: SKNode!    // ster-asset (langzamere laag)
     private let planetParallaxSpeed: CGFloat = 18.0
     private let starParallaxSpeed: CGFloat = 8.0
-    private var gradientSprite1: SKSpriteNode!
-    private var gradientSprite2: SKSpriteNode!
     private var splashNode: SKNode?
 
     override func didMove(to view: SKView) {
@@ -93,10 +90,9 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         waveIndex = 0
         spawnInterval = 2.0
 
-        // Scrollende donkerblauwe gradient background
-        setupScrollingGradient()
+        // Achtergrond = effen donker space blauw (backgroundColor)
 
-        // Sterren en planeten met parallax (licht, weinig nodes)
+        // Sterren en planeten met parallax
         setupSpaceParallax()
 
         // Player – sprite uit Assets (playerShip)
@@ -111,8 +107,8 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         player.zPosition = 20
         addChild(player)
 
-        // Bovenbalk: score + levens
-        let barHeight: CGFloat = 52
+        // Bovenbalk: levens links, score rechts
+        let barHeight: CGFloat = 44
         let topBar = SKNode()
         topBar.position = CGPoint(x: size.width / 2, y: size.height - barHeight / 2)
         topBar.zPosition = 100
@@ -122,28 +118,28 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         topBar.addChild(barBg)
         addChild(topBar)
 
-        // Levens – hartjes links in de balk
+        // Levens – hartjes links uitgelijnd
         lives = 3
         heartNodes.removeAll()
-        let heartSize: CGFloat = 28
-        let heartSpacing: CGFloat = 36
-        let leftMargin: CGFloat = 56
+        let heartSize: CGFloat = 20
+        let heartSpacing: CGFloat = 26
+        let edgeMargin: CGFloat = 14
         for i in 0..<3 {
             let heart = makeHeartNode(size: heartSize)
-            heart.position = CGPoint(x: -size.width / 2 + leftMargin + CGFloat(i) * heartSpacing, y: 0)
+            heart.position = CGPoint(x: -size.width / 2 + edgeMargin + heartSize / 2 + CGFloat(i) * (heartSize + heartSpacing), y: 0)
             heart.zPosition = 1
             heart.name = "heart\(i)"
             topBar.addChild(heart)
             heartNodes.append(heart)
         }
 
-        // Score – rechts in de balk
+        // Score – rechts uitgelijnd
         scoreLabel = SKLabelNode(fontNamed: "Avenir-Bold")
-        scoreLabel.fontSize = 32
+        scoreLabel.fontSize = 24
         scoreLabel.fontColor = .white
         scoreLabel.horizontalAlignmentMode = .right
         scoreLabel.verticalAlignmentMode = .center
-        scoreLabel.position = CGPoint(x: size.width / 2 - leftMargin, y: 0)
+        scoreLabel.position = CGPoint(x: size.width / 2 - edgeMargin, y: 0)
         scoreLabel.zPosition = 1
         scoreLabel.text = "Score: 0"
         topBar.addChild(scoreLabel)
@@ -193,50 +189,12 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         return container
     }
 
-    private func setupScrollingGradient() {
-        let texW: CGFloat = 512
-        let texH: CGFloat = 1024
-        let texture = makeGradientTexture(width: texW, height: texH)
-        let displayW = max(size.width, 1)
-        let displayH = max(size.height * 2, 1)
-        gradientSprite1 = SKSpriteNode(texture: texture, size: CGSize(width: displayW, height: displayH))
-        gradientSprite1.position = CGPoint(x: size.width / 2, y: size.height)
-        gradientSprite1.zPosition = -10
-        addChild(gradientSprite1)
-        gradientSprite2 = nil
-    }
-
-    private func makeGradientTexture(width: CGFloat, height: CGFloat) -> SKTexture {
-        let w = max(width, 1)
-        let h = max(height, 1)
-        let renderer = UIGraphicsImageRenderer(size: CGSize(width: w, height: h))
-        let image = renderer.image { ctx in
-            // Zelfde kleur aan begin en eind + extra stops aan randen = naadloze loop, minder banding
-            let colors = [
-                UIColor(red: 0.06, green: 0.09, blue: 0.2, alpha: 1).cgColor,
-                UIColor(red: 0.06, green: 0.09, blue: 0.2, alpha: 1).cgColor,
-                UIColor(red: 0.08, green: 0.12, blue: 0.28, alpha: 1).cgColor,
-                UIColor(red: 0.1, green: 0.14, blue: 0.32, alpha: 1).cgColor,
-                UIColor(red: 0.12, green: 0.16, blue: 0.38, alpha: 1).cgColor,
-                UIColor(red: 0.1, green: 0.14, blue: 0.32, alpha: 1).cgColor,
-                UIColor(red: 0.08, green: 0.12, blue: 0.28, alpha: 1).cgColor,
-                UIColor(red: 0.06, green: 0.09, blue: 0.2, alpha: 1).cgColor,
-                UIColor(red: 0.06, green: 0.09, blue: 0.2, alpha: 1).cgColor
-            ]
-            let locations: [CGFloat] = [0, 0.02, 0.2, 0.4, 0.5, 0.6, 0.8, 0.98, 1.0]
-            let colorSpace = CGColorSpaceCreateDeviceRGB()
-            let gradient = CGGradient(colorsSpace: colorSpace, colors: colors as CFArray, locations: locations)!
-            ctx.cgContext.drawLinearGradient(gradient, start: CGPoint(x: w/2, y: 0), end: CGPoint(x: w/2, y: h), options: [])
-        }
-        return SKTexture(image: image)
-    }
-
     /// Parallax-achtergrond met ster- en planeet-assets; sterren scrollen langzamer dan planeten voor diepte.
     private func setupSpaceParallax() {
         let w = size.width
         let h = size.height * 2.2
 
-        // Ster-laag vóór gradient zodat zichtbaar (langzame scroll)
+        // Ster-laag (langzame scroll)
         starParallaxNode = SKNode()
         starParallaxNode.zPosition = -8
         let starCount = 5
@@ -313,16 +271,6 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         lastUpdateTime = currentTime
 
         if gameOver { return }
-
-        // Scrollende gradient: reset als sprite net onder beeld is, dan valt naad buiten scherm
-        if let g1 = gradientSprite1, size.height > 0 {
-            let gradientH = size.height * 2
-            let resetMargin: CGFloat = 80
-            g1.position.y -= gradientScrollSpeed * CGFloat(dt)
-            if g1.position.y < -size.height - resetMargin {
-                g1.position.y += gradientH
-            }
-        }
 
         // Parallax sterren (langzaam) en planeten (sneller) voor diepte; naadloze wrap op content-hoogte
         let spaceContentH = size.height * 2.2
