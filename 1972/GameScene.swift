@@ -15,6 +15,7 @@ private let categoryEnemy:        UInt32 = 0x1 << 1
 private let categoryPlayerBullet: UInt32 = 0x1 << 2
 private let categoryEnemyBullet:  UInt32 = 0x1 << 3
 private let categoryPowerup:      UInt32 = 0x1 << 4
+private let categoryPlayerRocket: UInt32 = 0x1 << 5
 
 private let highscoreKey = "highscore1972"
 private let maxPlayerBullets = 5
@@ -24,6 +25,12 @@ private let enemyBulletSize = CGSize(width: 8, height: 16)
 private let enemyFireInterval: TimeInterval = 3.0
 private let powerupDropChance: Float = 0.15
 private let tripleShotDuration: TimeInterval = 10.0
+private let rocketDuration: TimeInterval = 12.0
+private let rocketFireInterval: TimeInterval = 0.6
+private let maxRockets = 3
+private let rocketSpeed: CGFloat = 380
+private let bulletScore = 10
+private let rocketScore = 25
 private let invincibilityDuration: TimeInterval = 1.5
 private let waveDuration: TimeInterval = 30.0
 
@@ -43,6 +50,8 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     private var heartNodes: [SKNode] = []
     private var invincibleUntil: TimeInterval = 0
     private var tripleShotUntil: TimeInterval = 0
+    private var rocketUntil: TimeInterval = 0
+    private var lastRocketFireTime: TimeInterval = 0
     private var lastUpdateTime: TimeInterval = 0
     private var backgroundNode: SKNode!
     private var cloudNode: SKNode!
@@ -137,14 +146,19 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     private func makeGradientTexture(width: CGFloat, height: CGFloat) -> SKTexture {
         let renderer = UIGraphicsImageRenderer(size: CGSize(width: width, height: height))
         let image = renderer.image { ctx in
-            // Zelfde kleur aan begin en eind = naadloze loop, geen donker blok meer
+            // Veel kleurstops = geleidelijke overgang lichter/donkerder, geen harde overgang
             let colors = [
-                UIColor(red: 0.25, green: 0.45, blue: 0.75, alpha: 1).cgColor,
-                UIColor(red: 0.35, green: 0.55, blue: 0.85, alpha: 1).cgColor,
-                UIColor(red: 0.25, green: 0.45, blue: 0.75, alpha: 1).cgColor
+                UIColor(red: 0.22, green: 0.42, blue: 0.72, alpha: 1).cgColor,
+                UIColor(red: 0.26, green: 0.46, blue: 0.78, alpha: 1).cgColor,
+                UIColor(red: 0.32, green: 0.52, blue: 0.82, alpha: 1).cgColor,
+                UIColor(red: 0.36, green: 0.56, blue: 0.88, alpha: 1).cgColor,
+                UIColor(red: 0.32, green: 0.52, blue: 0.82, alpha: 1).cgColor,
+                UIColor(red: 0.26, green: 0.46, blue: 0.78, alpha: 1).cgColor,
+                UIColor(red: 0.22, green: 0.42, blue: 0.72, alpha: 1).cgColor
             ]
+            let locations: [CGFloat] = [0, 0.2, 0.4, 0.5, 0.6, 0.8, 1.0]
             let colorSpace = CGColorSpaceCreateDeviceRGB()
-            let gradient = CGGradient(colorsSpace: colorSpace, colors: colors as CFArray, locations: [0, 0.5, 1])!
+            let gradient = CGGradient(colorsSpace: colorSpace, colors: colors as CFArray, locations: locations)!
             ctx.cgContext.drawLinearGradient(gradient, start: CGPoint(x: width/2, y: 0), end: CGPoint(x: width/2, y: height), options: [])
         }
         return SKTexture(image: image)
@@ -246,6 +260,15 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             }
         }
 
+        // Heat-seeking rockets (aparte powerup)
+        if touchLocationX != nil, currentTime < rocketUntil, currentTime - lastRocketFireTime >= rocketFireInterval {
+            let rocketCount = children.filter { $0.name == "playerRocket" }.count
+            if rocketCount < maxRockets {
+                lastRocketFireTime = currentTime
+                fireRocket()
+            }
+        }
+
         // Enemy waves – elke 30 sec snellere spawn
         let elapsed = currentTime - gameStartTime
         let nextWaveTime = waveDuration * TimeInterval(waveIndex + 1)
@@ -279,15 +302,71 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             bullet.removeFromParent()  // kogel verdwijnt direct, vliegt niet door
             enemy.removeFromParent()
             addExplosion(at: pos)
-            addScore(10)
+            addScore(bulletScore)
+            trySpawnPowerup(at: pos)
+        }
+
+        // Heat-seeking rockets: beweeg richting dichtstbijzijnde vijand
+        enumerateChildNodes(withName: "playerRocket") { rocket, _ in
+            guard let rocket = rocket as? SKSpriteNode else { return }
+            var nearest: (node: SKNode, dist: CGFloat)?
+            self.enumerateChildNodes(withName: "enemy") { enemy, _ in
+                let dx = enemy.position.x - rocket.position.x
+                let dy = enemy.position.y - rocket.position.y
+                let d = dx * dx + dy * dy
+                if nearest == nil || d < nearest!.dist { nearest = (enemy, d) }
+            }
+            if let target = nearest?.node {
+                let dx = target.position.x - rocket.position.x
+                let dy = target.position.y - rocket.position.y
+                let len = sqrt(dx * dx + dy * dy)
+                if len > 0 {
+                    let ux = dx / len
+                    let uy = dy / len
+                    rocket.position.x += ux * self.rocketSpeed * CGFloat(dt)
+                    rocket.position.y += uy * self.rocketSpeed * CGFloat(dt)
+                    rocket.zRotation = atan2(dx, dy) - .pi / 2  // nose naar target
+                }
+            } else {
+                // Geen vijand: vlieg rechtdoor omhoog
+                rocket.position.y += self.rocketSpeed * CGFloat(dt)
+            }
+            if rocket.position.y > self.size.height + 60 || rocket.position.y < -60 {
+                rocket.removeFromParent()
+            }
+        }
+
+        // Rocket vs enemy hit (meer damage = meer punten)
+        var rocketHits: [(rocket: SKNode, enemy: SKNode)] = []
+        enumerateChildNodes(withName: "playerRocket") { rocket, _ in
+            var hit = false
+            self.enumerateChildNodes(withName: "enemy") { enemy, _ in
+                if !hit && rocket.frame.intersects(enemy.frame) {
+                    rocketHits.append((rocket, enemy))
+                    hit = true
+                }
+            }
+        }
+        for (rocket, enemy) in rocketHits {
+            let pos = enemy.position
+            rocket.removeFromParent()
+            enemy.removeFromParent()
+            addExplosion(at: pos)
+            addScore(rocketScore)
             trySpawnPowerup(at: pos)
         }
 
         // Handmatige powerup-pickup (physics contact mist vaak)
-        enumerateChildNodes(withName: "powerup") { pw, _ in
+        enumerateChildNodes(withName: "powerupTriple") { pw, _ in
             if self.player.parent != nil && pw.frame.intersects(self.player.frame) {
                 pw.removeFromParent()
                 self.tripleShotUntil = self.lastUpdateTime + tripleShotDuration
+            }
+        }
+        enumerateChildNodes(withName: "powerupRocket") { pw, _ in
+            if self.player.parent != nil && pw.frame.intersects(self.player.frame) {
+                pw.removeFromParent()
+                self.rocketUntil = self.lastUpdateTime + rocketDuration
             }
         }
     }
@@ -298,16 +377,33 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
 
     private func fireTripleShot() {
         let dx: CGFloat = 25
-        addBullet(at: player.position, offsetX: -dx)
-        addBullet(at: player.position, offsetX: 0)
-        addBullet(at: player.position, offsetX: dx)
+        addBullet(at: player.position, offsetX: -dx, imageName: "bullet2")   // links
+        addBullet(at: player.position, offsetX: 0, imageName: "bullet1")    // midden (default)
+        addBullet(at: player.position, offsetX: dx, imageName: "bullet3")    // rechts
     }
 
-    private func addBullet(at basePos: CGPoint, offsetX: CGFloat) {
-        let bullet = SKSpriteNode(color: .white, size: playerBulletSize)
+    private func fireRocket() {
+        let rocket = SKSpriteNode(imageNamed: "rocket")
+        rocket.position = CGPoint(
+            x: player.position.x,
+            y: player.position.y + player.size.height / 2 + rocket.size.height / 2
+        )
+        rocket.name = "playerRocket"
+        rocket.physicsBody = SKPhysicsBody(rectangleOf: rocket.size)
+        rocket.physicsBody?.isDynamic = false
+        rocket.physicsBody?.usesPreciseCollisionDetection = true
+        rocket.physicsBody?.categoryBitMask = categoryPlayerRocket
+        rocket.physicsBody?.contactTestBitMask = categoryEnemy
+        rocket.physicsBody?.collisionBitMask = 0
+        rocket.zPosition = 15
+        addChild(rocket)
+    }
+
+    private func addBullet(at basePos: CGPoint, offsetX: CGFloat, imageName: String = "bullet1") {
+        let bullet = SKSpriteNode(imageNamed: imageName)
         bullet.position = CGPoint(
             x: basePos.x + offsetX,
-            y: basePos.y + player.size.height / 2 + playerBulletSize.height / 2
+            y: basePos.y + player.size.height / 2 + bullet.size.height / 2
         )
         bullet.name = "playerBullet"
         bullet.physicsBody = SKPhysicsBody(rectangleOf: bullet.size)
@@ -324,10 +420,10 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
 
     private func fireEnemyBullet(from enemy: SKSpriteNode) {
         guard enemy.parent != nil else { return }
-        let bullet = SKSpriteNode(color: .yellow, size: enemyBulletSize)
+        let bullet = SKSpriteNode(imageNamed: "bullet2")  // vijandkogel: andere bullet-asset
         bullet.position = CGPoint(x: enemy.position.x, y: enemy.position.y - enemy.size.height / 2 - bullet.size.height / 2)
         bullet.name = "enemyBullet"
-        bullet.physicsBody = SKPhysicsBody(rectangleOf: bullet.size)
+        bullet.physicsBody = SKPhysicsBody(rectangleOf: bullet.size)  // size uit texture
         bullet.physicsBody?.isDynamic = false
         bullet.physicsBody?.categoryBitMask = categoryEnemyBullet
         bullet.physicsBody?.contactTestBitMask = categoryPlayer
@@ -349,10 +445,16 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         enemy.physicsBody = SKPhysicsBody(rectangleOf: enemy.size)
         enemy.physicsBody?.isDynamic = false
         enemy.physicsBody?.categoryBitMask = categoryEnemy
-        enemy.physicsBody?.contactTestBitMask = categoryPlayer | categoryPlayerBullet
+        enemy.physicsBody?.contactTestBitMask = categoryPlayer | categoryPlayerBullet | categoryPlayerRocket
         enemy.physicsBody?.collisionBitMask = 0
         enemy.zPosition = 15
         addChild(enemy)
+
+        // Langzame draai: sommige linksom, andere rechtsom
+        let rotDuration = TimeInterval.random(in: 4...7)
+        let rotAngle: CGFloat = Bool.random() ? .pi * 2 : -.pi * 2  // linksom of rechtsom
+        let rotate = SKAction.rotate(byAngle: rotAngle, duration: rotDuration)
+        enemy.run(SKAction.repeatForever(rotate), withKey: "enemyRotate")
 
         let duration = max(3.0, 5.0 - TimeInterval(waveIndex) * 0.3)
         let move = SKAction.moveTo(y: -enemy.size.height, duration: duration)
