@@ -19,9 +19,9 @@ private let categoryPlayerRocket: UInt32 = 0x1 << 5
 
 private let highscoreKey = "highscore1972"
 private let maxPlayerBullets = 25  // genoeg dat vuren niet stopt zolang je het scherm vasthoudt
-private let playerBulletSize = CGSize(width: 7, height: 12)  // 50% kleiner
+private let playerBulletSize = CGSize(width: 4, height: 6)   // 50% kleiner (was 7x12)
 private let playerFireInterval: TimeInterval = 0.12
-private let enemyBulletSize = CGSize(width: 4, height: 8)  // 50% kleiner
+private let enemyBulletSize = CGSize(width: 2, height: 4)   // 50% kleiner (was 4x8)
 private let enemyFireInterval: TimeInterval = 3.0
 private let powerupDropChance: Float = 0.15
 private let tripleShotDuration: TimeInterval = 10.0
@@ -540,7 +540,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
 
     private func fireRocket() {
         let rocket = SKSpriteNode(imageNamed: "rocket")
-        let scale: CGFloat = 0.5  // 50% kleiner
+        let scale: CGFloat = 0.25  // 50% kleiner (was 0.5)
         rocket.setScale(scale)
         let scaledW = rocket.size.width * scale
         let scaledH = rocket.size.height * scale
