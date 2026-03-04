@@ -137,10 +137,11 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     private func makeGradientTexture(width: CGFloat, height: CGFloat) -> SKTexture {
         let renderer = UIGraphicsImageRenderer(size: CGSize(width: width, height: height))
         let image = renderer.image { ctx in
+            // Zelfde kleur aan begin en eind = naadloze loop, geen donker blok meer
             let colors = [
-                UIColor(red: 0.1, green: 0.25, blue: 0.5, alpha: 1).cgColor,
-                UIColor(red: 0.3, green: 0.5, blue: 0.85, alpha: 1).cgColor,
-                UIColor(red: 0.2, green: 0.4, blue: 0.7, alpha: 1).cgColor
+                UIColor(red: 0.25, green: 0.45, blue: 0.75, alpha: 1).cgColor,
+                UIColor(red: 0.35, green: 0.55, blue: 0.85, alpha: 1).cgColor,
+                UIColor(red: 0.25, green: 0.45, blue: 0.75, alpha: 1).cgColor
             ]
             let colorSpace = CGColorSpaceCreateDeviceRGB()
             let gradient = CGGradient(colorsSpace: colorSpace, colors: colors as CFArray, locations: [0, 0.5, 1])!
@@ -332,8 +333,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     }
 
     private func spawnEnemy() {
-        let enemySize = CGSize(width: 60, height: 40)
-        let enemy = SKSpriteNode(color: .red, size: enemySize)
+        let enemy = SKSpriteNode(imageNamed: "enemy1")
         let margin: CGFloat = 60
         let x = CGFloat.random(in: margin...(size.width - margin))
         enemy.position = CGPoint(x: x, y: size.height + enemy.size.height)
