@@ -324,7 +324,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         enumerateChildNodes(withName: "playerRocket") { rocket, _ in
             guard let rocket = rocket as? SKSpriteNode else { return }
             let spawnTime = (rocket.userData?["spawnTime"] as? TimeInterval) ?? 0
-            var heading = CGFloat((rocket.userData?["heading"] as? Double) ?? Double.pi / 2)
+            var heading = CGFloat((rocket.userData?["heading"] as? Double) ?? 0)
             let flyingStraight = (currentTime - spawnTime) < rocketStraightDuration
 
             var targetNode: SKNode?
@@ -349,13 +349,14 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             }
             if targetNode == nil { rocket.userData?["target"] = nil }
 
+            // heading 0 = omhoog (asset wijst al omhoog bij zRotation 0)
             let desiredAngle: CGFloat
             if flyingStraight || targetNode == nil {
-                desiredAngle = .pi / 2
+                desiredAngle = 0
             } else if let target = targetNode {
                 let dx = target.position.x - rocket.position.x
                 let dy = target.position.y - rocket.position.y
-                desiredAngle = atan2(dy, dx) - .pi / 2
+                desiredAngle = atan2(dx, dy)  // hoek t.o.v. positieve y-as (omhoog)
             } else {
                 desiredAngle = heading
             }
@@ -370,7 +371,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             rocket.userData = ud
             rocket.zRotation = heading
 
-            let moveX = -sin(heading) * self.rocketSpeed * CGFloat(dt)
+            let moveX = sin(heading) * self.rocketSpeed * CGFloat(dt)
             let moveY = cos(heading) * self.rocketSpeed * CGFloat(dt)
             rocket.position.x += moveX
             rocket.position.y += moveY
@@ -428,9 +429,9 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
 
     private func fireRocket() {
         let rocket = SKSpriteNode(imageNamed: "rocket")
-        rocket.zRotation = .pi / 2  // kwartslag omhoog
+        // Asset wijst al omhoog (geen rotatie in code); lengte = size.height
         let spawnX = player.position.x
-        let spawnY = player.position.y + player.size.height / 2 + rocket.size.width / 2
+        let spawnY = player.position.y + player.size.height / 2 + rocket.size.height / 2
         rocket.position = CGPoint(x: spawnX, y: spawnY)
         rocket.name = "playerRocket"
         rocket.physicsBody = SKPhysicsBody(rectangleOf: rocket.size)
@@ -440,16 +441,15 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         rocket.physicsBody?.contactTestBitMask = categoryEnemy
         rocket.physicsBody?.collisionBitMask = 0
         rocket.zPosition = 15
-        rocket.userData = ["spawnTime": lastUpdateTime, "heading": Double.pi / 2]  // heading = richting neus (en stuwkracht)
-        addChild(rocket)  // altijd aan de scene toevoegen, niet aan de speler
+        rocket.userData = ["spawnTime": lastUpdateTime, "heading": 0.0]  // 0 = omhoog (asset staat al goed)
+        addChild(rocket)
     }
 
     private func addBullet(at basePos: CGPoint, offsetX: CGFloat, imageName: String = "bullet1") {
         let bullet = SKSpriteNode(imageNamed: imageName)
-        bullet.zRotation = .pi / 2  // eerst draaien, daarna schalen voorkomt crop in oud frame
-        // Na 90°: texture-breedte wordt scherm-hoogte (lengte kogel), texture-hoogte wordt scherm-breedte
-        bullet.xScale = playerBulletSize.height / bullet.size.width   // lengte omhoog
-        bullet.yScale = playerBulletSize.width / bullet.size.height  // dikte
+        // Asset wijst al omhoog (geen rotatie in code)
+        bullet.xScale = playerBulletSize.width / bullet.size.width
+        bullet.yScale = playerBulletSize.height / bullet.size.height
         bullet.position = CGPoint(
             x: basePos.x + offsetX,
             y: basePos.y + player.size.height / 2 + playerBulletSize.height / 2
