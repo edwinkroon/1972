@@ -27,6 +27,7 @@ private let powerupDropChance: Float = 0.15
 private let tripleShotDuration: TimeInterval = 10.0
 private let spreadShotDuration: TimeInterval = 10.0
 private let spreadShotAngleDegrees: CGFloat = 20
+private let laserDuration: TimeInterval = 8.0
 private let rocketDuration: TimeInterval = 12.0
 private let rocketFireInterval: TimeInterval = 0.6
 private let maxRockets = 3
@@ -65,6 +66,8 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     private var invincibleUntil: TimeInterval = 0
     private var tripleShotUntil: TimeInterval = 0
     private var spreadShotUntil: TimeInterval = 0
+    private var laserUntil: TimeInterval = 0
+    private var laserBeamNode: SKSpriteNode?
     private var rocketUntil: TimeInterval = 0
     private var lastRocketFireTime: TimeInterval = 0
     private var lastFormationSpawnTime: TimeInterval = 0
@@ -290,8 +293,16 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             player.position.x = clampedX
         }
 
-        // Player fire – single or triple shot
-        if touchLocationX != nil, currentTime - lastPlayerFireTime >= playerFireInterval {
+        // Laser: beam bijhouden en vijanden in straal raken
+        if currentTime < laserUntil {
+            updateLaserBeam(dt: dt)
+        } else if laserBeamNode != nil {
+            laserBeamNode?.removeFromParent()
+            laserBeamNode = nil
+        }
+
+        // Player fire – single, triple, spread (niet tijdens laser)
+        if touchLocationX != nil, currentTime >= laserUntil, currentTime - lastPlayerFireTime >= playerFireInterval {
             let count = children.filter { $0.name == "playerBullet" }.count
             let limit = currentTime < tripleShotUntil ? maxPlayerBullets + 20 : maxPlayerBullets
             if count < limit {
@@ -477,6 +488,12 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             if self.player.parent != nil && pw.frame.intersects(self.player.frame) {
                 pw.removeFromParent()
                 self.spreadShotUntil = self.lastUpdateTime + spreadShotDuration
+            }
+        }
+        enumerateChildNodes(withName: "powerupLaser") { pw, _ in
+            if self.player.parent != nil && pw.frame.intersects(self.player.frame) {
+                pw.removeFromParent()
+                self.activateLaser()
             }
         }
     }
@@ -703,9 +720,26 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     private func trySpawnPowerup(at position: CGPoint) {
         if Float.random(in: 0...1) > powerupDropChance { return }
         let pwSize = CGSize(width: 32, height: 32)
-        let choice = Int.random(in: 0..<3)
-        let (color, name): (SKColor, String) = choice == 0 ? (.cyan, "powerupTriple") : choice == 1 ? (.orange, "powerupRocket") : (.green, "powerupSpread")
-        let pw = SKSpriteNode(color: color, size: pwSize)
+        let choice = Int.random(in: 0..<4)  // 0=triple, 1=spread, 2=rocket, 3=laser
+        let pw: SKSpriteNode
+        let name: String
+        switch choice {
+        case 0:
+            pw = SKSpriteNode(imageNamed: "powerup1")
+            name = "powerupTriple"
+        case 1:
+            pw = SKSpriteNode(imageNamed: "powerup2")
+            name = "powerupSpread"
+        case 2:
+            pw = SKSpriteNode(imageNamed: "powerup4")
+            name = "powerupRocket"
+        default:
+            pw = SKSpriteNode(imageNamed: "powerup3")
+            name = "powerupLaser"
+        }
+        if pw.texture != nil {
+            pw.size = pwSize
+        }
         pw.position = position
         pw.name = name
         pw.physicsBody = SKPhysicsBody(rectangleOf: pw.size)
@@ -717,6 +751,39 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         addChild(pw)
         let move = SKAction.moveTo(y: -pw.size.height, duration: 6)
         pw.run(SKAction.sequence([move, SKAction.removeFromParent()]))
+    }
+
+    private func activateLaser() {
+        laserUntil = lastUpdateTime + laserDuration
+        if laserBeamNode == nil {
+            let beam = SKSpriteNode(color: SKColor(red: 0.3, green: 0.7, blue: 1, alpha: 0.7), size: CGSize(width: 12, height: 100))
+            beam.name = "laserBeam"
+            beam.zPosition = 14
+            addChild(beam)
+            laserBeamNode = beam
+        }
+    }
+
+    private func updateLaserBeam(dt: TimeInterval) {
+        guard let beam = laserBeamNode, let pl = player, pl.parent != nil else { return }
+        let topY = size.height
+        let fromY = pl.position.y + pl.size.height / 2
+        let h = max(20, topY - fromY)
+        beam.size = CGSize(width: 12, height: h)
+        beam.position = CGPoint(x: pl.position.x, y: fromY + h / 2)
+        let beamRect = beam.frame
+        var hitEnemies: [SKNode] = []
+        enumerateChildNodes(withName: "enemy") { enemy, _ in
+            if beamRect.intersects(enemy.frame) { hitEnemies.append(enemy) }
+        }
+        for enemy in hitEnemies {
+            let pos = enemy.position
+            let color = debrisColor(for: enemy)
+            enemy.removeFromParent()
+            addEnemyDebris(at: pos, color: color)
+            addScore(bulletScore)
+            trySpawnPowerup(at: pos)
+        }
     }
 
     private func addExplosion(at position: CGPoint) {
@@ -813,6 +880,8 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
                 rocketUntil = lastUpdateTime + rocketDuration
             } else if name == "powerupSpread" {
                 spreadShotUntil = lastUpdateTime + spreadShotDuration
+            } else if name == "powerupLaser" {
+                activateLaser()
             } else {
                 tripleShotUntil = lastUpdateTime + tripleShotDuration
             }
