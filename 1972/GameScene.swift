@@ -49,8 +49,6 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     private var rocketSpeed: CGFloat = 400.0  // 50% langzamer (was 800)
     private var bulletSpeed: CGFloat = 600.0      // pixels/sec omhoog (bullet move duration afgeleid)
     private var enemyBulletSpeed: CGFloat = 250.0
-    private var cloudScrollSpeed: CGFloat = 25.0
-    private var cloudParallaxSpeed: CGFloat = 15.0
     private let gradientScrollSpeed: CGFloat = 30.0
 
     private var player: SKSpriteNode!
@@ -73,7 +71,6 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     private var lastFormationSpawnTime: TimeInterval = 0
     private var lastUpdateTime: TimeInterval = 0
     private var backgroundNode: SKNode!
-    private var cloudNode: SKNode!
     private var spaceParallaxNode: SKNode!   // planeten (snellere laag)
     private var starParallaxNode: SKNode!    // ster-asset (langzamere laag)
     private let planetParallaxSpeed: CGFloat = 18.0
@@ -101,9 +98,6 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
 
         // Sterren en planeten met parallax (licht, weinig nodes)
         setupSpaceParallax()
-
-        // Wolken parallax
-        setupClouds()
 
         // Player – sprite uit Assets (playerShip)
         player = SKSpriteNode(imageNamed: "playerShip")
@@ -237,44 +231,14 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         return SKTexture(image: image)
     }
 
-    private func setupClouds() {
-        cloudNode = SKNode()
-        cloudNode.zPosition = -5
-        addChild(cloudNode)
-        let cloudCount = 12
-        for _ in 0..<cloudCount {
-            let cloud = makeCloud()
-            cloud.position = CGPoint(
-                x: CGFloat.random(in: 0...size.width),
-                y: CGFloat.random(in: 0...size.height * 1.2)
-            )
-            cloudNode.addChild(cloud)
-        }
-    }
-
-    private func makeCloud() -> SKNode {
-        let group = SKNode()
-        let scale = CGFloat.random(in: 0.4...1.2)
-        for _ in 0..<4 {
-            let el = SKShapeNode(ellipseOf: CGSize(width: 60 * scale, height: 30 * scale))
-            el.fillColor = SKColor(white: 1, alpha: 0.5)
-            el.strokeColor = .clear
-            el.position = CGPoint(x: CGFloat.random(in: -30...30), y: CGFloat.random(in: -15...15))
-            group.addChild(el)
-        }
-        group.name = "cloud"
-        group.setScale(scale)
-        return group
-    }
-
     /// Parallax-achtergrond met ster- en planeet-assets; sterren scrollen langzamer dan planeten voor diepte.
     private func setupSpaceParallax() {
         let w = size.width
         let h = size.height * 2.2
 
-        // Ster-laag (achtergrond, langzaam)
+        // Ster-laag vóór gradient zodat zichtbaar (langzame scroll)
         starParallaxNode = SKNode()
-        starParallaxNode.zPosition = -12
+        starParallaxNode.zPosition = -8
         let starCount = 5
         for _ in 0..<starCount {
             let star = SKSpriteNode(imageNamed: "star1")
@@ -288,9 +252,9 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         starParallaxNode.position = .zero
         addChild(starParallaxNode)
 
-        // Planeet-laag (iets naar voren, sneller = parallax)
+        // Planeet-laag vóór sterren (snellere scroll = parallax)
         spaceParallaxNode = SKNode()
-        spaceParallaxNode.zPosition = -11
+        spaceParallaxNode.zPosition = -7
         let planetNames = ["planet1", "planet2", "planet3", "planet4", "planet5", "planet6", "planet7"]
         let planetCount = 8
         for i in 0..<planetCount {
@@ -359,15 +323,6 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
                 g1.position.y += gradientH
             }
         }
-
-        // Parallax clouds
-        cloudNode.position.y -= dt * cloudScrollSpeed
-        for child in cloudNode.children {
-            if let cloud = child as? SKNode, cloud.name == "cloud" {
-                cloud.position.y -= dt * cloudParallaxSpeed * CGFloat(cloud.xScale)
-            }
-        }
-        if cloudNode.position.y < -size.height { cloudNode.position.y += size.height }
 
         // Parallax sterren (langzaam) en planeten (sneller) voor diepte; naadloze wrap op content-hoogte
         let spaceContentH = size.height * 2.2
