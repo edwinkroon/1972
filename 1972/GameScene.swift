@@ -38,6 +38,8 @@ private let bulletScore = 10
 private let rocketScore = 25
 private let invincibilityDuration: TimeInterval = 1.5
 private let waveDuration: TimeInterval = 30.0
+private let formationSpawnInterval: TimeInterval = 14.0   // formatie alienplanes elke ~14 sec
+private let formationSpacing: CGFloat = 50                // afstand tussen vliegtuigen in formatie
 
 class GameScene: SKScene, SKPhysicsContactDelegate {
 
@@ -66,6 +68,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     private var spreadShotUntil: TimeInterval = 0
     private var rocketUntil: TimeInterval = 0
     private var lastRocketFireTime: TimeInterval = 0
+    private var lastFormationSpawnTime: TimeInterval = 0
     private var lastUpdateTime: TimeInterval = 0
     private var backgroundNode: SKNode!
     private var cloudNode: SKNode!
@@ -353,6 +356,12 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             if waveIndex >= 2 && Bool.random() { spawnEnemy() }
         }
 
+        // Formaties alienplanes (vanaf wave 1)
+        if waveIndex >= 1 && currentTime - lastFormationSpawnTime > formationSpawnInterval {
+            lastFormationSpawnTime = currentTime
+            spawnEnemyFormation()
+        }
+
         // Kogels met richting (spread shot): beweeg in hun hoek
         let spreadAngleRad = spreadShotAngleDegrees * .pi / 180
         enumerateChildNodes(withName: "playerBullet") { bullet, _ in
@@ -562,11 +571,12 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
 
     private func fireEnemyBullet(from enemy: SKSpriteNode) {
         guard enemy.parent != nil else { return }
-        let alienBulletSize = CGSize(width: 10, height: 10)  // witte vierkantjes, later eigen asset
-        let bullet = SKSpriteNode(color: .white, size: alienBulletSize)
-        bullet.position = CGPoint(x: enemy.position.x, y: enemy.position.y - enemy.size.height / 2 - alienBulletSize.height / 2)
+        let bullet = SKSpriteNode(imageNamed: "bullet4")
+        bullet.position = CGPoint(x: enemy.position.x, y: enemy.position.y - enemy.size.height / 2 - enemyBulletSize.height / 2)
+        bullet.xScale = enemyBulletSize.width / bullet.size.width
+        bullet.yScale = enemyBulletSize.height / bullet.size.height
         bullet.name = "enemyBullet"
-        bullet.physicsBody = SKPhysicsBody(rectangleOf: bullet.size)
+        bullet.physicsBody = SKPhysicsBody(rectangleOf: enemyBulletSize)
         bullet.physicsBody?.isDynamic = false
         bullet.physicsBody?.categoryBitMask = categoryEnemyBullet
         bullet.physicsBody?.contactTestBitMask = categoryPlayer
@@ -609,6 +619,68 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             self.fireEnemyBullet(from: enemy)
         }
         enemy.run(SKAction.repeatForever(SKAction.sequence([wait, shoot])), withKey: "enemyShoot")
+    }
+
+    /// Spawnt een formatie alienplanes (V of lijn) die samen omlaag vliegen.
+    private func spawnEnemyFormation() {
+        let margin: CGFloat = 80
+        let centerX = CGFloat.random(in: (margin + formationSpacing * 2)...(size.width - margin - formationSpacing * 2))
+        let topY = size.height + 80
+
+        // Formaties: 0 = V (5), 1 = horizontale lijn (4), 2 = kleine V (3)
+        let formationType = Int.random(in: 0...2)
+        let positions: [(x: CGFloat, y: CGFloat)]
+        switch formationType {
+        case 0:
+            // V-vorm: midden voor, links/rechts achter
+            positions = [
+                (centerX, topY),
+                (centerX - formationSpacing, topY - formationSpacing * 0.6),
+                (centerX + formationSpacing, topY - formationSpacing * 0.6),
+                (centerX - formationSpacing * 2, topY - formationSpacing * 1.2),
+                (centerX + formationSpacing * 2, topY - formationSpacing * 1.2)
+            ]
+        case 1:
+            // Horizontale lijn
+            positions = [
+                (centerX - formationSpacing * 1.5, topY),
+                (centerX - formationSpacing * 0.5, topY),
+                (centerX + formationSpacing * 0.5, topY),
+                (centerX + formationSpacing * 1.5, topY)
+            ]
+        default:
+            // Kleine V (3)
+            positions = [
+                (centerX, topY),
+                (centerX - formationSpacing, topY - formationSpacing * 0.5),
+                (centerX + formationSpacing, topY - formationSpacing * 0.5)
+            ]
+        }
+
+        let duration = max(3.2, 5.2 - TimeInterval(waveIndex) * 0.25)
+        for (i, pos) in positions.enumerated() {
+            let enemy = SKSpriteNode(imageNamed: "alienplane")
+            enemy.position = CGPoint(x: pos.x, y: pos.y)
+            enemy.name = "enemy"
+            enemy.physicsBody = SKPhysicsBody(rectangleOf: enemy.size)
+            enemy.physicsBody?.isDynamic = false
+            enemy.physicsBody?.categoryBitMask = categoryEnemy
+            enemy.physicsBody?.contactTestBitMask = categoryPlayer | categoryPlayerBullet | categoryPlayerRocket
+            enemy.physicsBody?.collisionBitMask = 0
+            enemy.zPosition = 15
+            addChild(enemy)
+
+            let targetY: CGFloat = -enemy.size.height - CGFloat(i) * 20
+            let move = SKAction.moveTo(y: targetY, duration: duration)
+            enemy.run(SKAction.sequence([move, SKAction.removeFromParent()]))
+
+            let wait = SKAction.wait(forDuration: enemyFireInterval)
+            let shoot = SKAction.run { [weak self, weak enemy] in
+                guard let self = self, let enemy = enemy, enemy.parent != nil else { return }
+                self.fireEnemyBullet(from: enemy)
+            }
+            enemy.run(SKAction.repeatForever(SKAction.sequence([wait, shoot])), withKey: "enemyShoot")
+        }
     }
 
     private func trySpawnPowerup(at position: CGPoint) {
