@@ -534,7 +534,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     private func addBullet(at basePos: CGPoint, offsetX: CGFloat, imageName: String = "bullet1", angle: CGFloat? = nil) {
         let bullet = SKSpriteNode(imageNamed: imageName)
         let rad = angle ?? 0
-        bullet.zRotation = .pi / 2 + rad  // bullets asset + richting (0 = omhoog)
+        bullet.zRotation = .pi / 2 - rad  // bullets asset; -rad zodat neus in vliegrichting wijst
         bullet.xScale = playerBulletSize.height / bullet.size.width
         bullet.yScale = playerBulletSize.width / bullet.size.height
         bullet.position = CGPoint(
