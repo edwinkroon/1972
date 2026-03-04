@@ -74,8 +74,10 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     private var lastUpdateTime: TimeInterval = 0
     private var backgroundNode: SKNode!
     private var cloudNode: SKNode!
-    private var spaceParallaxNode: SKNode!
-    private let spaceParallaxSpeed: CGFloat = 12.0
+    private var spaceParallaxNode: SKNode!   // planeten (snellere laag)
+    private var starParallaxNode: SKNode!    // ster-asset (langzamere laag)
+    private let planetParallaxSpeed: CGFloat = 18.0
+    private let starParallaxSpeed: CGFloat = 8.0
     private var gradientSprite1: SKSpriteNode!
     private var gradientSprite2: SKSpriteNode!
     private var splashNode: SKNode?
@@ -265,34 +267,40 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         return group
     }
 
-    /// Donkerblauwe ruimte met subtiele sterren en planeten; parallax door langzamere scroll.
+    /// Parallax-achtergrond met ster- en planeet-assets; sterren scrollen langzamer dan planeten voor diepte.
     private func setupSpaceParallax() {
-        spaceParallaxNode = SKNode()
-        spaceParallaxNode.zPosition = -11
         let w = size.width
         let h = size.height * 2.2
-        let starCount = 28
-        let planetCount = 6
+
+        // Ster-laag (achtergrond, langzaam)
+        starParallaxNode = SKNode()
+        starParallaxNode.zPosition = -12
+        let starCount = 5
         for _ in 0..<starCount {
-            let r = CGFloat.random(in: 0.8...2.2)
-            let star = SKShapeNode(circleOfRadius: r)
-            star.fillColor = SKColor(white: 1, alpha: CGFloat.random(in: 0.15...0.45))
-            star.strokeColor = .clear
-            star.position = CGPoint(x: CGFloat.random(in: 0...w), y: CGFloat.random(in: 0...h))
+            let star = SKSpriteNode(imageNamed: "star1")
             star.name = "spaceStar"
-            spaceParallaxNode.addChild(star)
+            let scale = CGFloat.random(in: 0.15...0.45)
+            star.setScale(scale)
+            star.position = CGPoint(x: CGFloat.random(in: 0...w), y: CGFloat.random(in: 0...h))
+            star.alpha = CGFloat.random(in: 0.5...1.0)
+            starParallaxNode.addChild(star)
         }
-        let planetColors: [(r: CGFloat, g: CGFloat, b: CGFloat)] = [
-            (0.12, 0.14, 0.28), (0.1, 0.1, 0.22), (0.14, 0.1, 0.2), (0.08, 0.12, 0.25), (0.15, 0.12, 0.28), (0.09, 0.11, 0.2)
-        ]
+        starParallaxNode.position = .zero
+        addChild(starParallaxNode)
+
+        // Planeet-laag (iets naar voren, sneller = parallax)
+        spaceParallaxNode = SKNode()
+        spaceParallaxNode.zPosition = -11
+        let planetNames = ["planet1", "planet2", "planet3", "planet4", "planet5", "planet6", "planet7"]
+        let planetCount = 8
         for i in 0..<planetCount {
-            let radius = CGFloat.random(in: 5...14)
-            let c = planetColors[i % planetColors.count]
-            let planet = SKShapeNode(circleOfRadius: radius)
-            planet.fillColor = SKColor(red: c.r, green: c.g, blue: c.b, alpha: CGFloat.random(in: 0.2...0.4))
-            planet.strokeColor = .clear
-            planet.position = CGPoint(x: CGFloat.random(in: 0...w), y: CGFloat.random(in: 0...h))
+            let name = planetNames[i % planetNames.count]
+            let planet = SKSpriteNode(imageNamed: name)
             planet.name = "spacePlanet"
+            let scale = CGFloat.random(in: 0.08...0.22)
+            planet.setScale(scale)
+            planet.position = CGPoint(x: CGFloat.random(in: 0...w), y: CGFloat.random(in: 0...h))
+            planet.alpha = CGFloat.random(in: 0.6...1.0)
             spaceParallaxNode.addChild(planet)
         }
         spaceParallaxNode.position = .zero
@@ -361,10 +369,15 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         }
         if cloudNode.position.y < -size.height { cloudNode.position.y += size.height }
 
-        // Parallax sterren/planeten (langzamer dan gradient = diepte)
-        if let space = spaceParallaxNode {
-            space.position.y -= spaceParallaxSpeed * CGFloat(dt)
-            if space.position.y < -size.height { space.position.y += size.height }
+        // Parallax sterren (langzaam) en planeten (sneller) voor diepte; naadloze wrap op content-hoogte
+        let spaceContentH = size.height * 2.2
+        if let stars = starParallaxNode {
+            stars.position.y -= starParallaxSpeed * CGFloat(dt)
+            if stars.position.y < -spaceContentH { stars.position.y += spaceContentH }
+        }
+        if let planets = spaceParallaxNode {
+            planets.position.y -= planetParallaxSpeed * CGFloat(dt)
+            if planets.position.y < -spaceContentH { planets.position.y += spaceContentH }
         }
 
         // Move player
