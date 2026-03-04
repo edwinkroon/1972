@@ -29,7 +29,7 @@ private let spreadShotDuration: TimeInterval = 10.0
 private let spreadShotAngleDegrees: CGFloat = 20
 private let laserDuration: TimeInterval = 8.0
 private let wingmanDuration: TimeInterval = 12.0
-private let wingmanOffset: CGFloat = 58  // afstand links/rechts van speler
+private let wingmanOffset: CGFloat = 72  // afstand links/rechts van speler
 private let rocketDuration: TimeInterval = 12.0
 private let rocketFireInterval: TimeInterval = 0.6
 private let maxRockets = 3
@@ -58,7 +58,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     private var score: Int = 0
     private var lastSpawnTime: TimeInterval = 0
     private var spawnInterval: TimeInterval = 2.0
-    private var touchLocationX: CGFloat?
+    private var touchLocation: CGPoint?   // x en y voor horizontaal + verticaal bewegen
     private var gameOver = false
     private var lastPlayerFireTime: TimeInterval = 0
     private var gameStartTime: TimeInterval = 0
@@ -262,7 +262,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         if let splash = splashNode {
             splash.run(SKAction.sequence([SKAction.fadeOut(withDuration: 0.2), SKAction.removeFromParent()]))
             splashNode = nil
-            touchLocationX = location.x
+            touchLocation = location
             return
         }
 
@@ -275,20 +275,20 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             }
             return
         }
-        touchLocationX = location.x
+        touchLocation = location
     }
 
     override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent?) {
         guard !gameOver else { return }
-        touchLocationX = touches.first?.location(in: self).x
+        touchLocation = touches.first?.location(in: self)
     }
 
     override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) {
-        touchLocationX = nil
+        touchLocation = nil
     }
 
     override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent?) {
-        touchLocationX = nil
+        touchLocation = nil
     }
 
     override func update(_ currentTime: TimeInterval) {
@@ -309,11 +309,14 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             if planets.position.y < -spaceContentH { planets.position.y += spaceContentH }
         }
 
-        // Move player
-        if let x = touchLocationX {
-            let half = player.size.width / 2
-            let clampedX = max(half, min(size.width - half, x))
-            player.position.x = clampedX
+        // Move player (horizontaal + verticaal)
+        if let loc = touchLocation {
+            let halfW = player.size.width / 2
+            let halfH = player.size.height / 2
+            let minY: CGFloat = 80
+            let maxY = size.height - 60  // onder de bovenbalk
+            player.position.x = max(halfW, min(size.width - halfW, loc.x))
+            player.position.y = max(minY + halfH, min(maxY - halfH, loc.y))
         }
 
         // Laser: beam bijhouden en vijanden in straal raken
@@ -333,7 +336,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         }
 
         // Player fire – single, triple, spread (niet tijdens laser)
-        if touchLocationX != nil, currentTime >= laserUntil, currentTime - lastPlayerFireTime >= playerFireInterval {
+        if touchLocation != nil, currentTime >= laserUntil, currentTime - lastPlayerFireTime >= playerFireInterval {
             let count = children.filter { $0.name == "playerBullet" }.count
             var limit = currentTime < tripleShotUntil ? maxPlayerBullets + 20 : maxPlayerBullets
             if currentTime < wingmanUntil { limit += 20 }
@@ -351,7 +354,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         }
 
         // Heat-seeking rockets (aparte powerup)
-        if touchLocationX != nil, currentTime < rocketUntil, currentTime - lastRocketFireTime >= rocketFireInterval {
+        if touchLocation != nil, currentTime < rocketUntil, currentTime - lastRocketFireTime >= rocketFireInterval {
             let rocketCount = children.filter { $0.name == "playerRocket" }.count
             if rocketCount < maxRockets {
                 lastRocketFireTime = currentTime
