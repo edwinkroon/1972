@@ -540,12 +540,15 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
 
     private func fireRocket() {
         let rocket = SKSpriteNode(imageNamed: "rocket")
-        // Asset wijst al omhoog (geen rotatie in code); lengte = size.height
+        let scale: CGFloat = 0.5  // 50% kleiner
+        rocket.setScale(scale)
+        let scaledW = rocket.size.width * scale
+        let scaledH = rocket.size.height * scale
         let spawnX = player.position.x
-        let spawnY = player.position.y + player.size.height / 2 + rocket.size.height / 2
+        let spawnY = player.position.y + player.size.height / 2 + scaledH / 2
         rocket.position = CGPoint(x: spawnX, y: spawnY)
         rocket.name = "playerRocket"
-        rocket.physicsBody = SKPhysicsBody(rectangleOf: rocket.size)
+        rocket.physicsBody = SKPhysicsBody(rectangleOf: CGSize(width: scaledW, height: scaledH))
         rocket.physicsBody?.isDynamic = false
         rocket.physicsBody?.usesPreciseCollisionDetection = true
         rocket.physicsBody?.categoryBitMask = categoryPlayerRocket
@@ -588,7 +591,9 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     private func fireEnemyBullet(from enemy: SKSpriteNode) {
         guard enemy.parent != nil else { return }
         let bullet = SKSpriteNode(imageNamed: "bullet4")
-        bullet.position = CGPoint(x: enemy.position.x, y: enemy.position.y - enemy.size.height / 2 - enemyBulletSize.height / 2)
+        // Onderkant van vijand (frame = zichtbare bbox, werkt bij elke rotatie)
+        let enemyBottom = enemy.frame.minY
+        bullet.position = CGPoint(x: enemy.position.x, y: enemyBottom - enemyBulletSize.height / 2)
         bullet.xScale = enemyBulletSize.width / bullet.size.width
         bullet.yScale = enemyBulletSize.height / bullet.size.height
         bullet.name = "enemyBullet"
@@ -614,14 +619,15 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         let halfW = scaledW / 2
         let minX = halfW
         let maxX = size.width - halfW
-        let minSpacing = scaledW + 24  // voorkom overlap met andere vijanden
-        var existingXs: [CGFloat] = []
+        let gap: CGFloat = 28
+        var existing: [(x: CGFloat, halfW: CGFloat)] = []
         enumerateChildNodes(withName: "enemy") { node, _ in
-            existingXs.append(node.position.x)
+            let w = node.frame.width
+            existing.append((node.position.x, w / 2))
         }
         var x: CGFloat = maxX >= minX ? CGFloat.random(in: minX...maxX) : size.width / 2
-        for _ in 0..<20 {
-            let ok = existingXs.allSatisfy { abs(x - $0) >= minSpacing }
+        for _ in 0..<25 {
+            let ok = existing.allSatisfy { abs(x - $0.x) >= halfW + $0.halfW + gap }
             if ok { break }
             x = maxX >= minX ? CGFloat.random(in: minX...maxX) : size.width / 2
         }
