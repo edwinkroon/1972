@@ -138,7 +138,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
 
         // Score – rechts uitgelijnd
         scoreLabel = SKLabelNode(fontNamed: "Avenir-Bold")
-        scoreLabel.fontSize = 24
+        scoreLabel.fontSize = 20
         scoreLabel.fontColor = .white
         scoreLabel.horizontalAlignmentMode = .right
         scoreLabel.verticalAlignmentMode = .center
@@ -183,13 +183,10 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     }
 
     private func makeHeartNode(size: CGFloat) -> SKNode {
-        let container = SKNode()
-        let r = size / 2
-        let circle = SKShapeNode(circleOfRadius: r)
-        circle.fillColor = .red
-        circle.strokeColor = .clear
-        container.addChild(circle)
-        return container
+        let ship = SKSpriteNode(imageNamed: "playerShip")
+        let scale = size / max(ship.size.width, ship.size.height)
+        ship.setScale(scale)
+        return ship
     }
 
     /// Parallax-achtergrond met ster- en planeet-assets; sterren scrollen langzamer dan planeten voor diepte.
