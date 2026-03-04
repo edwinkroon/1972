@@ -135,18 +135,20 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     }
 
     private func setupScrollingGradient() {
-        let w = size.width
-        let h = size.height * 2
+        let w = max(size.width, 1)
+        let h = max(size.height * 2, 1)
         let texture = makeGradientTexture(width: w, height: h)
         gradientSprite1 = SKSpriteNode(texture: texture, size: CGSize(width: w, height: h))
         gradientSprite1.position = CGPoint(x: size.width / 2, y: size.height)
         gradientSprite1.zPosition = -10
         addChild(gradientSprite1)
-        gradientSprite2 = nil  // niet meer gebruikt: één gradient voorkomt zichtbare naad
+        gradientSprite2 = nil
     }
 
     private func makeGradientTexture(width: CGFloat, height: CGFloat) -> SKTexture {
-        let renderer = UIGraphicsImageRenderer(size: CGSize(width: width, height: height))
+        let w = max(width, 1)
+        let h = max(height, 1)
+        let renderer = UIGraphicsImageRenderer(size: CGSize(width: w, height: h))
         let image = renderer.image { ctx in
             // Veel kleurstops = geleidelijke overgang lichter/donkerder, geen harde overgang
             let colors = [
@@ -161,7 +163,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             let locations: [CGFloat] = [0, 0.2, 0.4, 0.5, 0.6, 0.8, 1.0]
             let colorSpace = CGColorSpaceCreateDeviceRGB()
             let gradient = CGGradient(colorsSpace: colorSpace, colors: colors as CFArray, locations: locations)!
-            ctx.cgContext.drawLinearGradient(gradient, start: CGPoint(x: width/2, y: 0), end: CGPoint(x: width/2, y: height), options: [])
+            ctx.cgContext.drawLinearGradient(gradient, start: CGPoint(x: w/2, y: 0), end: CGPoint(x: w/2, y: h), options: [])
         }
         return SKTexture(image: image)
     }
@@ -233,10 +235,12 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         if gameOver { return }
 
         // Scrollende gradient (één sprite, naadloos reset = geen zichtbare streep)
-        let gradientH = size.height * 2
-        gradientSprite1.position.y -= gradientScrollSpeed * CGFloat(dt)
-        if gradientSprite1.position.y < -size.height {
-            gradientSprite1.position.y += gradientH
+        if let g1 = gradientSprite1, size.height > 0 {
+            let gradientH = size.height * 2
+            g1.position.y -= gradientScrollSpeed * CGFloat(dt)
+            if g1.position.y < -size.height {
+                g1.position.y += gradientH
+            }
         }
 
         // Parallax clouds
