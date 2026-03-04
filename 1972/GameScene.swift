@@ -173,11 +173,12 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     }
 
     private func setupScrollingGradient() {
-        let maxTexDim: CGFloat = 2048
-        let w = min(max(size.width, 1), maxTexDim)
-        let h = min(max(size.height * 2, 1), maxTexDim)
-        let texture = makeGradientTexture(width: w, height: h)
-        gradientSprite1 = SKSpriteNode(texture: texture, size: CGSize(width: w, height: h))
+        let texW: CGFloat = 512
+        let texH: CGFloat = 1024
+        let texture = makeGradientTexture(width: texW, height: texH)
+        let displayW = max(size.width, 1)
+        let displayH = max(size.height * 2, 1)
+        gradientSprite1 = SKSpriteNode(texture: texture, size: CGSize(width: displayW, height: displayH))
         gradientSprite1.position = CGPoint(x: size.width / 2, y: size.height)
         gradientSprite1.zPosition = -10
         addChild(gradientSprite1)
@@ -185,22 +186,23 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     }
 
     private func makeGradientTexture(width: CGFloat, height: CGFloat) -> SKTexture {
-        let maxTexDim: CGFloat = 2048
-        let w = min(max(width, 1), maxTexDim)
-        let h = min(max(height, 1), maxTexDim)
+        let w = max(width, 1)
+        let h = max(height, 1)
         let renderer = UIGraphicsImageRenderer(size: CGSize(width: w, height: h))
         let image = renderer.image { ctx in
-            // Veel kleurstops = geleidelijke overgang lichter/donkerder, geen harde overgang
+            // Zelfde kleur aan begin en eind + extra stops aan randen = naadloze loop, minder banding
             let colors = [
+                UIColor(red: 0.22, green: 0.42, blue: 0.72, alpha: 1).cgColor,
                 UIColor(red: 0.22, green: 0.42, blue: 0.72, alpha: 1).cgColor,
                 UIColor(red: 0.26, green: 0.46, blue: 0.78, alpha: 1).cgColor,
                 UIColor(red: 0.32, green: 0.52, blue: 0.82, alpha: 1).cgColor,
                 UIColor(red: 0.36, green: 0.56, blue: 0.88, alpha: 1).cgColor,
                 UIColor(red: 0.32, green: 0.52, blue: 0.82, alpha: 1).cgColor,
                 UIColor(red: 0.26, green: 0.46, blue: 0.78, alpha: 1).cgColor,
+                UIColor(red: 0.22, green: 0.42, blue: 0.72, alpha: 1).cgColor,
                 UIColor(red: 0.22, green: 0.42, blue: 0.72, alpha: 1).cgColor
             ]
-            let locations: [CGFloat] = [0, 0.2, 0.4, 0.5, 0.6, 0.8, 1.0]
+            let locations: [CGFloat] = [0, 0.02, 0.2, 0.4, 0.5, 0.6, 0.8, 0.98, 1.0]
             let colorSpace = CGColorSpaceCreateDeviceRGB()
             let gradient = CGGradient(colorsSpace: colorSpace, colors: colors as CFArray, locations: locations)!
             ctx.cgContext.drawLinearGradient(gradient, start: CGPoint(x: w/2, y: 0), end: CGPoint(x: w/2, y: h), options: [])
@@ -281,11 +283,12 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
 
         if gameOver { return }
 
-        // Scrollende gradient (één sprite, naadloos reset = geen zichtbare streep)
+        // Scrollende gradient: reset als sprite net onder beeld is, dan valt naad buiten scherm
         if let g1 = gradientSprite1, size.height > 0 {
             let gradientH = size.height * 2
+            let resetMargin: CGFloat = 80
             g1.position.y -= gradientScrollSpeed * CGFloat(dt)
-            if g1.position.y < -size.height {
+            if g1.position.y < -size.height - resetMargin {
                 g1.position.y += gradientH
             }
         }
