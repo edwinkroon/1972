@@ -15,8 +15,8 @@ class GameViewController: UIViewController {
         super.viewDidLoad()
         
         if let view = self.view as! SKView? {
-            // Create game scene with fixed landscape size (1942-style shooter)
-            let scene = GameScene(size: CGSize(width: 2048, height: 1536))
+            // Create game scene with fixed portrait size (1942-style shooter)
+            let scene = GameScene(size: CGSize(width: 1536, height: 2048))
             scene.scaleMode = .aspectFill
             view.presentScene(scene)
 
@@ -27,7 +27,7 @@ class GameViewController: UIViewController {
     }
 
     override var supportedInterfaceOrientations: UIInterfaceOrientationMask {
-        return .landscape
+        return .portrait
     }
 
     override var prefersStatusBarHidden: Bool {

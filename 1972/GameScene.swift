@@ -18,7 +18,7 @@ private let categoryPowerup:      UInt32 = 0x1 << 4
 
 private let highscoreKey = "highscore1972"
 private let maxPlayerBullets = 5
-private let playerBulletSize = CGSize(width: 10, height: 20)
+private let playerBulletSize = CGSize(width: 14, height: 24)
 private let playerFireInterval: TimeInterval = 0.12
 private let enemyBulletSize = CGSize(width: 8, height: 16)
 private let enemyFireInterval: TimeInterval = 3.0
@@ -66,9 +66,8 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         // Wolken parallax
         setupClouds()
 
-        // Player (green rect 50x40) – bottom center
-        let playerSize = CGSize(width: 50, height: 40)
-        player = SKSpriteNode(color: .green, size: playerSize)
+        // Player – sprite uit Assets (playerShip)
+        player = SKSpriteNode(imageNamed: "playerShip")
         player.position = CGPoint(x: size.width / 2, y: 80)
         player.name = "player"
         player.physicsBody = SKPhysicsBody(rectangleOf: player.size)
@@ -283,6 +282,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         bullet.name = "playerBullet"
         bullet.physicsBody = SKPhysicsBody(rectangleOf: bullet.size)
         bullet.physicsBody?.isDynamic = false
+        bullet.physicsBody?.usesPreciseCollisionDetection = true  // voorkomt tunnelen door vijand
         bullet.physicsBody?.categoryBitMask = categoryPlayerBullet
         bullet.physicsBody?.contactTestBitMask = categoryEnemy
         bullet.physicsBody?.collisionBitMask = 0
