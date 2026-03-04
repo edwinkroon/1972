@@ -556,8 +556,9 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
                 let color = self.debrisColor(for: enemy)
                 enemy.removeFromParent()
                 self.addEnemyDebris(at: pos, color: color)
-                self.triggerGameOver()
-                return  // stop meteen na game over
+                self.invincibleUntil = self.lastUpdateTime + self.invincibilityDuration
+                self.loseOneLife()
+                return
             }
         }
     }
