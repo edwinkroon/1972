@@ -181,26 +181,30 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         splash.zPosition = 1000
         splash.name = "splash"
 
-        let title = SKLabelNode(fontNamed: "Avenir-Bold")
-        title.text = "1972"
-        title.fontSize = 72
-        title.fontColor = .white
-        title.position = CGPoint(x: 0, y: 20)
-        title.zPosition = 1001
-        splash.addChild(title)
+        // 1/3 van de pagina = vliegtuig; 2/3 = tekst (splash is gecentreerd, dus 0 = midden)
+        let yOneThird = size.height / 3 - size.height / 2   // 1/3 vanaf onder
+        let yTwoThirds = 2 * size.height / 3 - size.height / 2  // 2/3 vanaf onder
 
         let ship = SKSpriteNode(imageNamed: "playerShip")
         ship.zRotation = -15 * .pi / 180  // 15° gedraaid
         ship.setScale(1.1)
-        ship.position = CGPoint(x: 0, y: 55)
+        ship.position = CGPoint(x: 0, y: yOneThird)
         ship.zPosition = 1001
         splash.addChild(ship)
+
+        let title = SKLabelNode(fontNamed: "Avenir-Bold")
+        title.text = "1972"
+        title.fontSize = 72
+        title.fontColor = .white
+        title.position = CGPoint(x: 0, y: yTwoThirds + 25)
+        title.zPosition = 1001
+        splash.addChild(title)
 
         let sub = SKLabelNode(fontNamed: "Avenir")
         sub.text = "Tap to start"
         sub.fontSize = 28
         sub.fontColor = .white
-        sub.position = CGPoint(x: 0, y: -50)
+        sub.position = CGPoint(x: 0, y: yTwoThirds - 35)
         sub.zPosition = 1001
         splash.addChild(sub)
 
