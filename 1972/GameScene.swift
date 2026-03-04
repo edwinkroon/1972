@@ -46,7 +46,7 @@ private let alienplaneDebrisColor = SKColor(red: 0.2, green: 0.5, blue: 0.25, al
 class GameScene: SKScene, SKPhysicsContactDelegate {
 
     // Snelheden en tuning (instance properties voor gebruik in update/touches/closures)
-    private var rocketSpeed: CGFloat = 800.0
+    private var rocketSpeed: CGFloat = 400.0  // 50% langzamer (was 800)
     private var bulletSpeed: CGFloat = 600.0      // pixels/sec omhoog (bullet move duration afgeleid)
     private var enemyBulletSpeed: CGFloat = 250.0
     private var cloudScrollSpeed: CGFloat = 25.0
