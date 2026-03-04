@@ -447,9 +447,9 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
 
     private func addBullet(at basePos: CGPoint, offsetX: CGFloat, imageName: String = "bullet1") {
         let bullet = SKSpriteNode(imageNamed: imageName)
-        // Asset wijst al omhoog (geen rotatie in code)
-        bullet.xScale = playerBulletSize.width / bullet.size.width
-        bullet.yScale = playerBulletSize.height / bullet.size.height
+        bullet.zRotation = .pi / 2  // bullets nog niet gedraaid in asset
+        bullet.xScale = playerBulletSize.height / bullet.size.width   // na 90°: lengte omhoog
+        bullet.yScale = playerBulletSize.width / bullet.size.height   // dikte
         bullet.position = CGPoint(
             x: basePos.x + offsetX,
             y: basePos.y + player.size.height / 2 + playerBulletSize.height / 2
