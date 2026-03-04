@@ -27,8 +27,9 @@ class GameViewController: UIViewController {
         view.backgroundColor = .black
         skView.backgroundColor = SKColor(red: 0.2, green: 0.4, blue: 0.7, alpha: 1)
 
-        let scene = GameScene(size: CGSize(width: 1536, height: 2048))
-        scene.scaleMode = .aspectFill
+        // Scene grootte = view grootte, zodat alles binnen het zichtbare scherm blijft (geen aspectFill-crop)
+        let scene = GameScene(size: skView.bounds.size)
+        scene.scaleMode = .resizeFill
         skView.presentScene(scene)
 
         skView.ignoresSiblingOrder = true
