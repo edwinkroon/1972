@@ -68,9 +68,13 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     private var cloudNode: SKNode!
     private var gradientSprite1: SKSpriteNode!
     private var gradientSprite2: SKSpriteNode!
+    private var splashNode: SKNode?
 
     override func didMove(to view: SKView) {
         backgroundColor = SKColor(red: 0.2, green: 0.4, blue: 0.7, alpha: 1)
+
+        // Splash direct tonen zodat je ziet dat de scene start (ook bij zwart scherm)
+        showSplash()
 
         physicsWorld.gravity = .zero
         physicsWorld.contactDelegate = self
@@ -122,6 +126,40 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         scoreLabel.zPosition = 100
         scoreLabel.text = "Score: 0"
         addChild(scoreLabel)
+    }
+
+    private func showSplash() {
+        let w = max(size.width, 320)
+        let h = max(size.height, 480)
+        let splash = SKSpriteNode(color: SKColor(red: 0.9, green: 0.5, blue: 0.1, alpha: 1), size: CGSize(width: w, height: h))
+        splash.position = CGPoint(x: size.width / 2, y: size.height / 2)
+        splash.zPosition = 1000
+        splash.name = "splash"
+
+        let title = SKLabelNode(fontNamed: "Avenir-Bold")
+        title.text = "1972"
+        title.fontSize = 72
+        title.fontColor = .white
+        title.position = CGPoint(x: 0, y: 20)
+        title.zPosition = 1001
+        splash.addChild(title)
+
+        let sub = SKLabelNode(fontNamed: "Avenir")
+        sub.text = "Tap to start"
+        sub.fontSize = 28
+        sub.fontColor = .white
+        sub.position = CGPoint(x: 0, y: -50)
+        sub.zPosition = 1001
+        splash.addChild(sub)
+
+        addChild(splash)
+        splashNode = splash
+
+        let wait = SKAction.wait(forDuration: 2.5)
+        let fade = SKAction.fadeOut(withDuration: 0.5)
+        splash.run(SKAction.sequence([wait, fade, SKAction.removeFromParent()])) { [weak self] in
+            self?.splashNode = nil
+        }
     }
 
     private func makeHeartNode(size: CGFloat) -> SKNode {
@@ -201,6 +239,13 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
         guard let touch = touches.first else { return }
         let location = touch.location(in: self)
+
+        if let splash = splashNode {
+            splash.run(SKAction.sequence([SKAction.fadeOut(withDuration: 0.2), SKAction.removeFromParent()]))
+            splashNode = nil
+            touchLocationX = location.x
+            return
+        }
 
         if gameOver {
             let node = atPoint(location)
