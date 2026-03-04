@@ -28,6 +28,10 @@ private let tripleShotDuration: TimeInterval = 10.0
 private let rocketDuration: TimeInterval = 12.0
 private let rocketFireInterval: TimeInterval = 0.6
 private let maxRockets = 3
+/// Zet op false om raketten alleen recht omhoog te laten vliegen (geen heat-seeking) – handig om te testen
+private let rocketHomingEnabled = true
+/// Maximale draaisnelheid in radialen per seconde – raket is zwaar, kan niet snel draaien
+private let rocketMaxTurnRate: CGFloat = 1.0
 private let bulletScore = 10
 private let rocketScore = 25
 private let invincibilityDuration: TimeInterval = 1.5
@@ -311,20 +315,26 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             trySpawnPowerup(at: pos)
         }
 
-        // Heat-seeking rockets: eerst kort recht omhoog, dan op vijand; draai vloeiend (kortste hoek)
-        let rocketStraightDuration: TimeInterval = 0.12
+        // Raketten: zwaar gedrag – stuwkracht alleen achterin, traag draaien, alleen vijanden op scherm
+        let rocketStraightDuration: TimeInterval = 0.1
+        let margin: CGFloat = 40
+        let onScreen = { (p: CGPoint) in
+            p.x >= -margin && p.x <= self.size.width + margin && p.y >= -margin && p.y <= self.size.height + margin
+        }
         enumerateChildNodes(withName: "playerRocket") { rocket, _ in
             guard let rocket = rocket as? SKSpriteNode else { return }
             let spawnTime = (rocket.userData?["spawnTime"] as? TimeInterval) ?? 0
+            var heading = CGFloat((rocket.userData?["heading"] as? Double) ?? Double.pi / 2)
             let flyingStraight = (currentTime - spawnTime) < rocketStraightDuration
 
             var targetNode: SKNode?
-            if !flyingStraight, let locked = rocket.userData?["target"] as? SKNode, locked.parent != nil {
+            if rocketHomingEnabled && !flyingStraight, let locked = rocket.userData?["target"] as? SKNode, locked.parent != nil, onScreen(locked.position) {
                 targetNode = locked
             }
-            if targetNode == nil && !flyingStraight {
+            if rocketHomingEnabled && targetNode == nil && !flyingStraight {
                 var nearest: (node: SKNode, dist: CGFloat)?
                 self.enumerateChildNodes(withName: "enemy") { enemy, _ in
+                    guard onScreen(enemy.position) else { return }
                     let dx = enemy.position.x - rocket.position.x
                     let dy = enemy.position.y - rocket.position.y
                     let d = dx * dx + dy * dy
@@ -337,31 +347,33 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
                     rocket.userData = ud
                 }
             }
+            if targetNode == nil { rocket.userData?["target"] = nil }
 
+            let desiredAngle: CGFloat
             if flyingStraight || targetNode == nil {
-                rocket.position.y += self.rocketSpeed * CGFloat(dt)
-                if targetNode == nil { rocket.userData?["target"] = nil }
-                let upAngle: CGFloat = .pi / 2
-                var diff = upAngle - rocket.zRotation
-                while diff > .pi { diff -= 2 * .pi }; while diff < -.pi { diff += 2 * .pi }
-                let turnSpeed: CGFloat = 6.0 * CGFloat(dt)
-                rocket.zRotation += max(-turnSpeed, min(turnSpeed, diff))
+                desiredAngle = .pi / 2
             } else if let target = targetNode {
                 let dx = target.position.x - rocket.position.x
                 let dy = target.position.y - rocket.position.y
-                let len = sqrt(dx * dx + dy * dy)
-                if len > 0 {
-                    let ux = dx / len
-                    let uy = dy / len
-                    rocket.position.x += ux * self.rocketSpeed * CGFloat(dt)
-                    rocket.position.y += uy * self.rocketSpeed * CGFloat(dt)
-                    let targetAngle = atan2(dy, dx) - .pi / 2
-                    var diff = targetAngle - rocket.zRotation
-                    while diff > .pi { diff -= 2 * .pi }; while diff < -.pi { diff += 2 * .pi }
-                    let turnSpeed: CGFloat = 6.0 * CGFloat(dt)
-                    rocket.zRotation += max(-turnSpeed, min(turnSpeed, diff))
-                }
+                desiredAngle = atan2(dy, dx) - .pi / 2
+            } else {
+                desiredAngle = heading
             }
+
+            var diff = desiredAngle - heading
+            while diff > .pi { diff -= 2 * .pi }; while diff < -.pi { diff += 2 * .pi }
+            let maxTurn = rocketMaxTurnRate * CGFloat(dt)
+            heading += max(-maxTurn, min(maxTurn, diff))
+            var ud = rocket.userData ?? [:]
+            ud["heading"] = Double(heading)
+            if targetNode == nil { ud["target"] = nil }
+            rocket.userData = ud
+            rocket.zRotation = heading
+
+            let moveX = -sin(heading) * self.rocketSpeed * CGFloat(dt)
+            let moveY = cos(heading) * self.rocketSpeed * CGFloat(dt)
+            rocket.position.x += moveX
+            rocket.position.y += moveY
 
             if rocket.position.y > self.size.height + 60 || rocket.position.y < -60 {
                 rocket.removeFromParent()
@@ -428,7 +440,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         rocket.physicsBody?.contactTestBitMask = categoryEnemy
         rocket.physicsBody?.collisionBitMask = 0
         rocket.zPosition = 15
-        rocket.userData = ["spawnTime": lastUpdateTime]  // korte rechte start voor natuurlijkere vlucht
+        rocket.userData = ["spawnTime": lastUpdateTime, "heading": Double.pi / 2]  // heading = richting neus (en stuwkracht)
         addChild(rocket)  // altijd aan de scene toevoegen, niet aan de speler
     }
 
