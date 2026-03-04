@@ -39,7 +39,9 @@ private let rocketScore = 25
 private let invincibilityDuration: TimeInterval = 1.5
 private let waveDuration: TimeInterval = 30.0
 private let formationSpawnInterval: TimeInterval = 14.0   // formatie alienplanes elke ~14 sec
-private let formationSpacing: CGFloat = 50                // afstand tussen vliegtuigen in formatie
+private let formationSpacing: CGFloat = 72                // afstand tussen vliegtuigen in formatie
+private let enemy1DebrisColor = SKColor(red: 0.35, green: 0.4, blue: 0.45, alpha: 1)   // grijs
+private let alienplaneDebrisColor = SKColor(red: 0.2, green: 0.5, blue: 0.25, alpha: 1)  // groen
 
 class GameScene: SKScene, SKPhysicsContactDelegate {
 
@@ -108,30 +110,42 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         player.zPosition = 20
         addChild(player)
 
-        // Lives – 3 hart-icons linksboven
+        // Bovenbalk: score + levens
+        let barHeight: CGFloat = 52
+        let topBar = SKNode()
+        topBar.position = CGPoint(x: size.width / 2, y: size.height - barHeight / 2)
+        topBar.zPosition = 100
+        let barBg = SKSpriteNode(color: SKColor(white: 0.1, alpha: 0.75), size: CGSize(width: size.width + 2, height: barHeight + 2))
+        barBg.position = .zero
+        barBg.zPosition = -1
+        topBar.addChild(barBg)
+        addChild(topBar)
+
+        // Levens – hartjes links in de balk
         lives = 3
         heartNodes.removeAll()
-        let heartSize: CGFloat = 32
-        let heartSpacing: CGFloat = 40
-        let heartY = size.height - 60
+        let heartSize: CGFloat = 28
+        let heartSpacing: CGFloat = 36
+        let leftMargin: CGFloat = 56
         for i in 0..<3 {
             let heart = makeHeartNode(size: heartSize)
-            heart.position = CGPoint(x: 60 + CGFloat(i) * heartSpacing, y: heartY)
-            heart.zPosition = 100
+            heart.position = CGPoint(x: -size.width / 2 + leftMargin + CGFloat(i) * heartSpacing, y: 0)
+            heart.zPosition = 1
             heart.name = "heart\(i)"
-            addChild(heart)
+            topBar.addChild(heart)
             heartNodes.append(heart)
         }
 
-        // Score label – rechtsboven
+        // Score – rechts in de balk
         scoreLabel = SKLabelNode(fontNamed: "Avenir-Bold")
-        scoreLabel.fontSize = 36
+        scoreLabel.fontSize = 32
         scoreLabel.fontColor = .white
         scoreLabel.horizontalAlignmentMode = .right
-        scoreLabel.position = CGPoint(x: size.width - 60, y: size.height - 60)
-        scoreLabel.zPosition = 100
+        scoreLabel.verticalAlignmentMode = .center
+        scoreLabel.position = CGPoint(x: size.width / 2 - leftMargin, y: 0)
+        scoreLabel.zPosition = 1
         scoreLabel.text = "Score: 0"
-        addChild(scoreLabel)
+        topBar.addChild(scoreLabel)
     }
 
     private func showSplash() {
@@ -388,10 +402,11 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         }
         for (bullet, enemy) in hits {
             let pos = enemy.position
+            let color = debrisColor(for: enemy)
             bullet.removeAllActions()
             bullet.removeFromParent()  // kogel verdwijnt direct, vliegt niet door
             enemy.removeFromParent()
-            addExplosion(at: pos)
+            addEnemyDebris(at: pos, color: color)
             addScore(bulletScore)
             trySpawnPowerup(at: pos)
         }
@@ -476,9 +491,10 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         }
         for (rocket, enemy) in rocketHits {
             let pos = enemy.position
+            let color = debrisColor(for: enemy)
             rocket.removeFromParent()
             enemy.removeFromParent()
-            addExplosion(at: pos)
+            addEnemyDebris(at: pos, color: color)
             addScore(rocketScore)
             trySpawnPowerup(at: pos)
         }
@@ -591,8 +607,10 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
 
     private func spawnEnemy() {
         let enemy = SKSpriteNode(imageNamed: "enemy1")
-        let margin: CGFloat = 60
-        let x = CGFloat.random(in: margin...(size.width - margin))
+        let halfW = enemy.size.width / 2
+        let minX = halfW
+        let maxX = size.width - halfW
+        let x = maxX >= minX ? CGFloat.random(in: minX...maxX) : size.width / 2
         enemy.position = CGPoint(x: x, y: size.height + enemy.size.height)
         enemy.name = "enemy"
         enemy.physicsBody = SKPhysicsBody(rectangleOf: enemy.size)
@@ -601,6 +619,8 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         enemy.physicsBody?.contactTestBitMask = categoryPlayer | categoryPlayerBullet | categoryPlayerRocket
         enemy.physicsBody?.collisionBitMask = 0
         enemy.zPosition = 15
+        enemy.userData = NSMutableDictionary()
+        (enemy.userData as? NSMutableDictionary)?["enemyType"] = "enemy1"
         addChild(enemy)
 
         // Langzame draai: sommige linksom, andere rechtsom
@@ -623,9 +643,14 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
 
     /// Spawnt een formatie alienplanes (V of lijn) die samen omlaag vliegen.
     private func spawnEnemyFormation() {
-        let margin: CGFloat = 80
-        let centerX = CGFloat.random(in: (margin + formationSpacing * 2)...(size.width - margin - formationSpacing * 2))
-        let topY = size.height + 80
+        let ref = SKSpriteNode(imageNamed: "alienplane")
+        let halfW = ref.size.width / 2
+        let halfH = ref.size.height / 2
+        let formationHalfExtent = formationSpacing * 2 + halfW
+        let minCenterX = formationHalfExtent
+        let maxCenterX = size.width - formationHalfExtent
+        let centerX = maxCenterX >= minCenterX ? CGFloat.random(in: minCenterX...maxCenterX) : size.width / 2
+        let topY = size.height + halfH + 20
 
         // Formaties: 0 = V (5), 1 = horizontale lijn (4), 2 = kleine V (3)
         let formationType = Int.random(in: 0...2)
@@ -660,6 +685,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         let duration = max(3.2, 5.2 - TimeInterval(waveIndex) * 0.25)
         for (i, pos) in positions.enumerated() {
             let enemy = SKSpriteNode(imageNamed: "alienplane")
+            enemy.zRotation = .pi  // asset wijst omhoog; 180° zodat ze omlaag vliegen en omlaag schieten
             enemy.position = CGPoint(x: pos.x, y: pos.y)
             enemy.name = "enemy"
             enemy.physicsBody = SKPhysicsBody(rectangleOf: enemy.size)
@@ -668,6 +694,8 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             enemy.physicsBody?.contactTestBitMask = categoryPlayer | categoryPlayerBullet | categoryPlayerRocket
             enemy.physicsBody?.collisionBitMask = 0
             enemy.zPosition = 15
+            enemy.userData = NSMutableDictionary()
+            (enemy.userData as? NSMutableDictionary)?["enemyType"] = "alienplane"
             addChild(enemy)
 
             let targetY: CGFloat = -enemy.size.height - CGFloat(i) * 20
@@ -722,6 +750,39 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         emitter.run(SKAction.sequence([SKAction.wait(forDuration: 0.5), SKAction.removeFromParent()]))
     }
 
+    /// Kleur voor brokstukken op basis van vijandtype (userData["enemyType"]).
+    private func debrisColor(for enemy: SKNode?) -> SKColor {
+        guard let type = enemy?.userData?["enemyType"] as? String else { return enemy1DebrisColor }
+        return type == "alienplane" ? alienplaneDebrisColor : enemy1DebrisColor
+    }
+
+    /// Vijand klapt uit elkaar in gekleurde brokstukken die uiteenvliegen en omlaag vallen.
+    private func addEnemyDebris(at position: CGPoint, color: SKColor) {
+        let pieceCount = 10
+        let baseSize: CGFloat = 8
+        let spread: CGFloat = 60
+        let fallDuration: TimeInterval = 0.9
+        for i in 0..<pieceCount {
+            let size = baseSize + CGFloat.random(in: -2...6)
+            let rect = CGRect(x: -size/2, y: -size/2, width: size, height: size)
+            let piece = SKShapeNode(rect: rect)
+            piece.fillColor = color
+            piece.strokeColor = .clear
+            piece.position = position
+            piece.zPosition = 49
+            addChild(piece)
+            let angle = CGFloat(i) / CGFloat(pieceCount) * .pi * 2 + CGFloat.random(in: 0...0.5)
+            let dx = cos(angle) * CGFloat.random(in: spread * 0.4...spread)
+            let dy = -CGFloat.random(in: spread * 0.6...spread * 1.2)
+            let move = SKAction.moveBy(x: dx, y: dy, duration: fallDuration)
+            let rotate = SKAction.rotate(byAngle: CGFloat.random(in: -2...2) * .pi, duration: fallDuration)
+            let fade = SKAction.fadeOut(withDuration: fallDuration * 0.6)
+            let group = SKAction.group([move, rotate])
+            let seq = SKAction.sequence([group, SKAction.wait(forDuration: 0.1), fade, SKAction.removeFromParent()])
+            piece.run(seq)
+        }
+    }
+
     func didBegin(_ contact: SKPhysicsContact) {
         let bodyA = contact.bodyA
         let bodyB = contact.bodyB
@@ -733,9 +794,10 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             let bullet = maskA == categoryPlayerBullet ? bodyA.node : bodyB.node
             let enemy = maskA == categoryEnemy ? bodyA.node : bodyB.node
             let hitPos = enemy?.position ?? bullet?.position ?? .zero
+            let color = debrisColor(for: enemy)
             bullet?.removeFromParent()
             enemy?.removeFromParent()
-            addExplosion(at: hitPos)
+            addEnemyDebris(at: hitPos, color: color)
             addScore(bulletScore)
             trySpawnPowerup(at: hitPos)
         }
@@ -745,9 +807,10 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             let rocket = maskA == categoryPlayerRocket ? bodyA.node : bodyB.node
             let enemy = maskA == categoryEnemy ? bodyA.node : bodyB.node
             let hitPos = enemy?.position ?? rocket?.position ?? .zero
+            let color = debrisColor(for: enemy)
             rocket?.removeFromParent()
             enemy?.removeFromParent()
-            addExplosion(at: hitPos)
+            addEnemyDebris(at: hitPos, color: color)
             addScore(rocketScore)
             trySpawnPowerup(at: hitPos)
         }
@@ -776,7 +839,10 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         // Player vs Enemy (ram) – tegenstander raakt je = direct dood
         if (maskA == categoryPlayer && maskB == categoryEnemy) || (maskA == categoryEnemy && maskB == categoryPlayer) {
             let enemy = maskA == categoryEnemy ? bodyA.node : bodyB.node
+            let pos = enemy?.position ?? .zero
+            let color = debrisColor(for: enemy)
             enemy?.removeFromParent()
+            addEnemyDebris(at: pos, color: color)
             triggerGameOver()
         }
     }
