@@ -19,9 +19,9 @@ private let categoryPlayerRocket: UInt32 = 0x1 << 5
 
 private let highscoreKey = "highscore1972"
 private let maxPlayerBullets = 25  // genoeg dat vuren niet stopt zolang je het scherm vasthoudt
-private let playerBulletSize = CGSize(width: 14, height: 24)
+private let playerBulletSize = CGSize(width: 7, height: 12)  // 50% kleiner
 private let playerFireInterval: TimeInterval = 0.12
-private let enemyBulletSize = CGSize(width: 8, height: 16)
+private let enemyBulletSize = CGSize(width: 4, height: 8)  // 50% kleiner
 private let enemyFireInterval: TimeInterval = 3.0
 private let powerupDropChance: Float = 0.15
 private let tripleShotDuration: TimeInterval = 10.0
@@ -607,13 +607,27 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
 
     private func spawnEnemy() {
         let enemy = SKSpriteNode(imageNamed: "enemy1")
-        let halfW = enemy.size.width / 2
+        let scale: CGFloat = 0.9  // 10% kleiner
+        enemy.setScale(scale)
+        let scaledW = enemy.size.width * scale
+        let scaledH = enemy.size.height * scale
+        let halfW = scaledW / 2
         let minX = halfW
         let maxX = size.width - halfW
-        let x = maxX >= minX ? CGFloat.random(in: minX...maxX) : size.width / 2
-        enemy.position = CGPoint(x: x, y: size.height + enemy.size.height)
+        let minSpacing = scaledW + 24  // voorkom overlap met andere vijanden
+        var existingXs: [CGFloat] = []
+        enumerateChildNodes(withName: "enemy") { node, _ in
+            existingXs.append(node.position.x)
+        }
+        var x: CGFloat = maxX >= minX ? CGFloat.random(in: minX...maxX) : size.width / 2
+        for _ in 0..<20 {
+            let ok = existingXs.allSatisfy { abs(x - $0) >= minSpacing }
+            if ok { break }
+            x = maxX >= minX ? CGFloat.random(in: minX...maxX) : size.width / 2
+        }
+        enemy.position = CGPoint(x: x, y: size.height + scaledH)
         enemy.name = "enemy"
-        enemy.physicsBody = SKPhysicsBody(rectangleOf: enemy.size)
+        enemy.physicsBody = SKPhysicsBody(rectangleOf: CGSize(width: scaledW, height: scaledH))
         enemy.physicsBody?.isDynamic = false
         enemy.physicsBody?.categoryBitMask = categoryEnemy
         enemy.physicsBody?.contactTestBitMask = categoryPlayer | categoryPlayerBullet | categoryPlayerRocket
@@ -630,7 +644,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         enemy.run(SKAction.repeatForever(rotate), withKey: "enemyRotate")
 
         let duration = max(3.0, 5.0 - TimeInterval(waveIndex) * 0.3)
-        let move = SKAction.moveTo(y: -enemy.size.height, duration: duration)
+        let move = SKAction.moveTo(y: -scaledH, duration: duration)
         enemy.run(SKAction.sequence([move, SKAction.removeFromParent()]))
 
         let wait = SKAction.wait(forDuration: enemyFireInterval)
