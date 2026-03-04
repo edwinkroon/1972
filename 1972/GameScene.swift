@@ -41,6 +41,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     private var enemyBulletSpeed: CGFloat = 250.0
     private var cloudScrollSpeed: CGFloat = 25.0
     private var cloudParallaxSpeed: CGFloat = 15.0
+    private let gradientScrollSpeed: CGFloat = 30.0
 
     private var player: SKSpriteNode!
     private var scoreLabel: SKLabelNode!
@@ -134,19 +135,10 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         let h = size.height * 2
         let texture = makeGradientTexture(width: w, height: h)
         gradientSprite1 = SKSpriteNode(texture: texture, size: CGSize(width: w, height: h))
-        gradientSprite2 = SKSpriteNode(texture: texture, size: CGSize(width: w, height: h))
-        gradientSprite1.position = CGPoint(x: size.width / 2, y: size.height / 2)
-        gradientSprite2.position = CGPoint(x: size.width / 2, y: size.height / 2 + h)
+        gradientSprite1.position = CGPoint(x: size.width / 2, y: size.height)
         gradientSprite1.zPosition = -10
-        gradientSprite2.zPosition = -10
         addChild(gradientSprite1)
-        addChild(gradientSprite2)
-
-        let moveUp = SKAction.moveBy(x: 0, y: -h, duration: 8)
-        let reset = SKAction.moveBy(x: 0, y: h, duration: 0)
-        let loop = SKAction.repeatForever(SKAction.sequence([moveUp, reset]))
-        gradientSprite1.run(loop)
-        gradientSprite2.run(SKAction.sequence([SKAction.wait(forDuration: 4), loop]))
+        gradientSprite2 = nil  // niet meer gebruikt: één gradient voorkomt zichtbare naad
     }
 
     private func makeGradientTexture(width: CGFloat, height: CGFloat) -> SKTexture {
@@ -235,6 +227,13 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         lastUpdateTime = currentTime
 
         if gameOver { return }
+
+        // Scrollende gradient (één sprite, naadloos reset = geen zichtbare streep)
+        let gradientH = size.height * 2
+        gradientSprite1.position.y -= gradientScrollSpeed * CGFloat(dt)
+        if gradientSprite1.position.y < -size.height {
+            gradientSprite1.position.y += gradientH
+        }
 
         // Parallax clouds
         cloudNode.position.y -= dt * cloudScrollSpeed
@@ -407,13 +406,16 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
 
     private func addBullet(at basePos: CGPoint, offsetX: CGFloat, imageName: String = "bullet1") {
         let bullet = SKSpriteNode(imageNamed: imageName)
+        // Zelfde grootte voor enkele en triple-shot kogels
+        bullet.xScale = playerBulletSize.width / bullet.size.width
+        bullet.yScale = playerBulletSize.height / bullet.size.height
         bullet.zRotation = .pi / 2  // kwartslag zodat kogel naar boven wijst
         bullet.position = CGPoint(
             x: basePos.x + offsetX,
-            y: basePos.y + player.size.height / 2 + bullet.size.height / 2
+            y: basePos.y + player.size.height / 2 + playerBulletSize.height / 2
         )
         bullet.name = "playerBullet"
-        bullet.physicsBody = SKPhysicsBody(rectangleOf: bullet.size)
+        bullet.physicsBody = SKPhysicsBody(rectangleOf: playerBulletSize)
         bullet.physicsBody?.isDynamic = false
         bullet.physicsBody?.usesPreciseCollisionDetection = true  // voorkomt tunnelen door vijand
         bullet.physicsBody?.categoryBitMask = categoryPlayerBullet
@@ -421,9 +423,9 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         bullet.physicsBody?.collisionBitMask = 0
         bullet.zPosition = 15
         addChild(bullet)
-        let distance = size.height + bullet.size.height - bullet.position.y
+        let distance = size.height + playerBulletSize.height - bullet.position.y
         let duration = max(0.3, distance / bulletSpeed)
-        let move = SKAction.moveTo(y: size.height + bullet.size.height, duration: duration)
+        let move = SKAction.moveTo(y: size.height + playerBulletSize.height, duration: duration)
         bullet.run(SKAction.sequence([move, SKAction.removeFromParent()]))
     }
 
