@@ -369,7 +369,8 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             ud["heading"] = Double(heading)
             if targetNode == nil { ud["target"] = nil }
             rocket.userData = ud
-            rocket.zRotation = heading
+            // SpriteKit: lokale +y wijst naar (-sin(zRotation), cos(zRotation)); wij willen (sin(heading), cos(heading)) → zRotation = -heading
+            rocket.zRotation = -heading
 
             let moveX = sin(heading) * self.rocketSpeed * CGFloat(dt)
             let moveY = cos(heading) * self.rocketSpeed * CGFloat(dt)
