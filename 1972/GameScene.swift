@@ -25,6 +25,8 @@ private let enemyBulletSize = CGSize(width: 8, height: 16)
 private let enemyFireInterval: TimeInterval = 3.0
 private let powerupDropChance: Float = 0.15
 private let tripleShotDuration: TimeInterval = 10.0
+private let spreadShotDuration: TimeInterval = 10.0
+private let spreadShotAngleDegrees: CGFloat = 20
 private let rocketDuration: TimeInterval = 12.0
 private let rocketFireInterval: TimeInterval = 0.6
 private let maxRockets = 3
@@ -61,6 +63,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     private var heartNodes: [SKNode] = []
     private var invincibleUntil: TimeInterval = 0
     private var tripleShotUntil: TimeInterval = 0
+    private var spreadShotUntil: TimeInterval = 0
     private var rocketUntil: TimeInterval = 0
     private var lastRocketFireTime: TimeInterval = 0
     private var lastUpdateTime: TimeInterval = 0
@@ -317,6 +320,8 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
                 lastPlayerFireTime = currentTime
                 if currentTime < tripleShotUntil {
                     fireTripleShot()
+                } else if currentTime < spreadShotUntil {
+                    fireSpreadShot()
                 } else {
                     firePlayerBullet()
                 }
@@ -346,6 +351,19 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             spawnEnemy()
             if waveIndex >= 1 && Bool.random() { spawnEnemy() }
             if waveIndex >= 2 && Bool.random() { spawnEnemy() }
+        }
+
+        // Kogels met richting (spread shot): beweeg in hun hoek
+        let spreadAngleRad = spreadShotAngleDegrees * .pi / 180
+        enumerateChildNodes(withName: "playerBullet") { bullet, _ in
+            guard let angle = bullet.userData?["angle"] as? CGFloat else { return }
+            let dx = sin(angle) * self.bulletSpeed * CGFloat(dt)
+            let dy = cos(angle) * self.bulletSpeed * CGFloat(dt)
+            bullet.position.x += dx
+            bullet.position.y += dy
+            if bullet.position.y > self.size.height + 50 || bullet.position.y < -50 || bullet.position.x < -50 || bullet.position.x > self.size.width + 50 {
+                bullet.removeFromParent()
+            }
         }
 
         // Handmatige hit: kogel vs vijand – kogel stopt bij eerste treffer (gaat niet door)
@@ -469,6 +487,12 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
                 self.rocketUntil = self.lastUpdateTime + rocketDuration
             }
         }
+        enumerateChildNodes(withName: "powerupSpread") { pw, _ in
+            if self.player.parent != nil && pw.frame.intersects(self.player.frame) {
+                pw.removeFromParent()
+                self.spreadShotUntil = self.lastUpdateTime + spreadShotDuration
+            }
+        }
     }
 
     private func firePlayerBullet() {
@@ -480,6 +504,13 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         addBullet(at: player.position, offsetX: -dx, imageName: "bullet2")   // links
         addBullet(at: player.position, offsetX: 0, imageName: "bullet1")    // midden (default)
         addBullet(at: player.position, offsetX: dx, imageName: "bullet3")    // rechts
+    }
+
+    private func fireSpreadShot() {
+        let angleRad = spreadShotAngleDegrees * .pi / 180
+        addBullet(at: player.position, offsetX: 0, imageName: "bullet1", angle: -angleRad)   // 20° links
+        addBullet(at: player.position, offsetX: 0, imageName: "bullet1", angle: 0)            // recht vooruit
+        addBullet(at: player.position, offsetX: 0, imageName: "bullet1", angle: angleRad)    // 20° rechts
     }
 
     private func fireRocket() {
@@ -500,11 +531,12 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         addChild(rocket)
     }
 
-    private func addBullet(at basePos: CGPoint, offsetX: CGFloat, imageName: String = "bullet1") {
+    private func addBullet(at basePos: CGPoint, offsetX: CGFloat, imageName: String = "bullet1", angle: CGFloat? = nil) {
         let bullet = SKSpriteNode(imageNamed: imageName)
-        bullet.zRotation = .pi / 2  // bullets nog niet gedraaid in asset
-        bullet.xScale = playerBulletSize.height / bullet.size.width   // na 90°: lengte omhoog
-        bullet.yScale = playerBulletSize.width / bullet.size.height   // dikte
+        let rad = angle ?? 0
+        bullet.zRotation = .pi / 2 + rad  // bullets asset + richting (0 = omhoog)
+        bullet.xScale = playerBulletSize.height / bullet.size.width
+        bullet.yScale = playerBulletSize.width / bullet.size.height
         bullet.position = CGPoint(
             x: basePos.x + offsetX,
             y: basePos.y + player.size.height / 2 + playerBulletSize.height / 2
@@ -512,16 +544,20 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         bullet.name = "playerBullet"
         bullet.physicsBody = SKPhysicsBody(rectangleOf: playerBulletSize)
         bullet.physicsBody?.isDynamic = false
-        bullet.physicsBody?.usesPreciseCollisionDetection = true  // voorkomt tunnelen door vijand
+        bullet.physicsBody?.usesPreciseCollisionDetection = true
         bullet.physicsBody?.categoryBitMask = categoryPlayerBullet
         bullet.physicsBody?.contactTestBitMask = categoryEnemy
         bullet.physicsBody?.collisionBitMask = 0
         bullet.zPosition = 15
         addChild(bullet)
-        let distance = size.height + playerBulletSize.height - bullet.position.y
-        let duration = max(0.3, distance / bulletSpeed)
-        let move = SKAction.moveTo(y: size.height + playerBulletSize.height, duration: duration)
-        bullet.run(SKAction.sequence([move, SKAction.removeFromParent()]))
+        if let a = angle {
+            bullet.userData = ["angle": a]
+        } else {
+            let distance = size.height + playerBulletSize.height - bullet.position.y
+            let duration = max(0.3, distance / bulletSpeed)
+            let move = SKAction.moveTo(y: size.height + playerBulletSize.height, duration: duration)
+            bullet.run(SKAction.sequence([move, SKAction.removeFromParent()]))
+        }
     }
 
     private func fireEnemyBullet(from enemy: SKSpriteNode) {
@@ -558,7 +594,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         addChild(enemy)
 
         // Langzame draai: sommige linksom, andere rechtsom
-        let rotDuration = TimeInterval.random(in: 4...7)
+        let rotDuration = TimeInterval.random(in: 3...5.5)  // net iets sneller draaien
         let rotAngle: CGFloat = Bool.random() ? .pi * 2 : -.pi * 2  // linksom of rechtsom
         let rotate = SKAction.rotate(byAngle: rotAngle, duration: rotDuration)
         enemy.run(SKAction.repeatForever(rotate), withKey: "enemyRotate")
@@ -578,10 +614,11 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     private func trySpawnPowerup(at position: CGPoint) {
         if Float.random(in: 0...1) > powerupDropChance { return }
         let pwSize = CGSize(width: 32, height: 32)
-        let isRocketPowerup = Bool.random()
-        let pw = SKSpriteNode(color: isRocketPowerup ? .orange : .cyan, size: pwSize)
+        let choice = Int.random(in: 0..<3)
+        let (color, name): (SKColor, String) = choice == 0 ? (.cyan, "powerupTriple") : choice == 1 ? (.orange, "powerupRocket") : (.green, "powerupSpread")
+        let pw = SKSpriteNode(color: color, size: pwSize)
         pw.position = position
-        pw.name = isRocketPowerup ? "powerupRocket" : "powerupTriple"
+        pw.name = name
         pw.physicsBody = SKPhysicsBody(rectangleOf: pw.size)
         pw.physicsBody?.isDynamic = false
         pw.physicsBody?.categoryBitMask = categoryPowerup
@@ -650,6 +687,8 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             pw?.removeFromParent()
             if name == "powerupRocket" {
                 rocketUntil = lastUpdateTime + rocketDuration
+            } else if name == "powerupSpread" {
+                spreadShotUntil = lastUpdateTime + spreadShotDuration
             } else {
                 tripleShotUntil = lastUpdateTime + tripleShotDuration
             }
