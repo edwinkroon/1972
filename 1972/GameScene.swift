@@ -92,6 +92,8 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     private var lastUpdateTime: TimeInterval = 0
     private var endBossNode: SKSpriteNode?
     private var endBossLastLaserTime: TimeInterval = 0
+    private var endBossHealthBg: SKSpriteNode?
+    private var endBossHealthFill: SKSpriteNode?
     private var backgroundNode: SKNode!
     private var spaceParallaxNode: SKNode!   // planeten (snellere laag)
     private var starParallaxNode: SKNode!    // ster-asset (langzamere laag)
@@ -373,10 +375,11 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
 
         // Player fire – single, triple, spread (niet tijdens laser)
         if touchLocation != nil, currentTime >= laserUntil, currentTime - lastPlayerFireTime >= playerFireInterval {
-            let count = children.filter { $0.name == "playerBullet" }.count
+            var bulletCount = 0
+            for child in children { if child.name == "playerBullet" { bulletCount += 1 } }
             var limit = currentTime < tripleShotUntil ? maxPlayerBullets + 20 : maxPlayerBullets
             if currentTime < wingmanUntil { limit += 20 }
-            if count < limit {
+            if bulletCount < limit {
                 lastPlayerFireTime = currentTime
                 if currentTime < tripleShotUntil {
                     fireTripleShot()
@@ -391,7 +394,8 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
 
         // Heat-seeking rockets (aparte powerup)
         if touchLocation != nil, currentTime < rocketUntil, currentTime - lastRocketFireTime >= rocketFireInterval {
-            let rocketCount = children.filter { $0.name == "playerRocket" }.count
+            var rocketCount = 0
+            for child in children { if child.name == "playerRocket" { rocketCount += 1 } }
             if rocketCount < maxRockets {
                 lastRocketFireTime = currentTime
                 fireRocket()
@@ -429,9 +433,13 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         // Eindbaas: blijft bovenin, draaien en elke seconde 4 lasers
         if let boss = endBossNode, boss.parent != nil {
             boss.zRotation += endBossRotationSpeed * CGFloat(dt)
-            // Healthbar niet meedraaien: tegenrotatie zodat de balk horizontaal blijft
-            boss.childNode(withName: "bossHealthBg")?.zRotation = -boss.zRotation
-            boss.childNode(withName: "bossHealthFill")?.zRotation = -boss.zRotation
+            // Healthbar (in scene) elke frame boven de eindbaas houden, draait niet mee (gecachte refs = geen tree lookup)
+            let barYOffset = boss.frame.height / 2 + 15
+            if let bg = endBossHealthBg, let fill = endBossHealthFill {
+                let barW = bg.size.width
+                bg.position = CGPoint(x: boss.position.x, y: boss.position.y + barYOffset)
+                fill.position = CGPoint(x: boss.position.x - barW / 2, y: boss.position.y + barYOffset)
+            }
             if currentTime - endBossLastLaserTime >= endBossLaserInterval {
                 endBossLastLaserTime = currentTime
                 let sideHits = (boss.userData?["bossSideHits"] as? [Int]) ?? [0,0,0,0]
@@ -1025,32 +1033,34 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         endBossNode = boss
         endBossLastLaserTime = lastUpdateTime
 
-        // Healthbar boven de eindbaas: eerst groen, wordt rood naarmate health daalt
+        // Healthbar boven de eindbaas: in de scene (niet als kind van boss) zodat hij niet meedraait
         let barW = scaledW * 1.2
         let barH: CGFloat = 6
-        let barY = scaledH / 2 + barH / 2 + 12
+        let barYOffset = scaledH / 2 + barH / 2 + 12
         let bg = SKSpriteNode(color: SKColor(white: 0.2, alpha: 0.95), size: CGSize(width: barW, height: barH))
-        bg.position = CGPoint(x: 0, y: barY)
-        bg.zPosition = 1
-        bg.name = "bossHealthBg"
-        boss.addChild(bg)
+        bg.position = CGPoint(x: boss.position.x, y: boss.position.y + barYOffset)
+        bg.zPosition = 16
+        bg.name = "endBossHealthBg"
+        addChild(bg)
+        endBossHealthBg = bg
         let fill = SKSpriteNode(color: SKColor(red: 0.2, green: 0.85, blue: 0.3, alpha: 1), size: CGSize(width: barW, height: barH))
         fill.anchorPoint = CGPoint(x: 0, y: 0.5)
-        fill.position = CGPoint(x: -barW / 2, y: barY)
-        fill.zPosition = 2
-        fill.name = "bossHealthFill"
-        boss.addChild(fill)
+        fill.position = CGPoint(x: boss.position.x - barW / 2, y: boss.position.y + barYOffset)
+        fill.zPosition = 17
+        fill.name = "endBossHealthFill"
+        addChild(fill)
+        endBossHealthFill = fill
     }
 
     /// Richting 0,1,2,3 = de vier kanten van de baas; meedraaien met boss.zRotation. Alleen lasers, geen kogels.
     private func fireBossLaser(from boss: SKSpriteNode, direction: Int) {
         guard boss.parent != nil else { return }
         // Rode laserstraal: lang en dun, draait mee met de eindbaas
-        let laserSize = CGSize(width: 5, height: 32)
-        let laser = SKSpriteNode(color: SKColor(red: 1, green: 0.15, blue: 0.15, alpha: 1), size: laserSize)
-        // Glow: bredere, zachte rode halo om de straal
-        let glowSize = CGSize(width: 18, height: 44)
-        let glow = SKSpriteNode(color: SKColor(red: 1, green: 0.2, blue: 0.2, alpha: 0.5), size: glowSize)
+        let laserSize = CGSize(width: 5, height: 90)
+        let laser = SKSpriteNode(color: SKColor(red: 1, green: 0.05, blue: 0.05, alpha: 1), size: laserSize)
+        // Glow: bredere, felle rode halo om de straal
+        let glowSize = CGSize(width: 22, height: 110)
+        let glow = SKSpriteNode(color: SKColor(red: 1, green: 0.08, blue: 0.08, alpha: 0.7), size: glowSize)
         glow.zPosition = -1
         laser.addChild(glow)
         // Wereldhoek van deze kant: 0=rechts boss, 1=onder, 2=links, 3=boven (lokaal) → + boss rotatie
@@ -1100,7 +1110,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
 
         // Healthbar: schaal en kleur (groen → rood)
         let frac = max(0, min(1, health / endBossTotalHealth))
-        if let fill = boss.childNode(withName: "bossHealthFill") as? SKSpriteNode {
+        if let fill = endBossHealthFill {
             fill.xScale = frac
             let r = 1.0 - frac
             let g = 0.2 + 0.65 * frac
@@ -1109,6 +1119,10 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
 
         if health <= 0 {
             let pos = boss.position
+            endBossHealthBg?.removeFromParent()
+            endBossHealthFill?.removeFromParent()
+            endBossHealthBg = nil
+            endBossHealthFill = nil
             boss.removeFromParent()
             endBossNode = nil
             addEnemyDebris(at: pos, color: endBossDebrisColor)
