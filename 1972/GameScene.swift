@@ -46,6 +46,16 @@ private let formationSpacing: CGFloat = 72                // afstand tussen vlie
 private let enemy1DebrisColor = SKColor(red: 0.35, green: 0.4, blue: 0.45, alpha: 1)   // grijs
 private let alienplaneDebrisColor = SKColor(red: 0.2, green: 0.5, blue: 0.25, alpha: 1)  // groen
 
+// Eindbaas
+private let endBossSpawnAfter: TimeInterval = 60.0       // na 1 minuut
+private let endBossTotalHealth: CGFloat = 200
+private let endBossSideMaxHits: Int = 6                   // per kant; na 6 treffers gaat die laser kapot
+private let endBossLaserInterval: TimeInterval = 1.0
+private let endBossRotationSpeed: CGFloat = 0.3           // radialen per seconde
+private let endBossBulletSpeed: CGFloat = 280
+private let endBossScore = 500
+private let endBossDebrisColor = SKColor(red: 0.6, green: 0.2, blue: 0.2, alpha: 1)
+
 class GameScene: SKScene, SKPhysicsContactDelegate {
 
     // Snelheden en tuning (instance properties voor gebruik in update/touches/closures)
@@ -79,6 +89,8 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     private var lastRocketFireTime: TimeInterval = 0
     private var lastFormationSpawnTime: TimeInterval = 0
     private var lastUpdateTime: TimeInterval = 0
+    private var endBossNode: SKSpriteNode?
+    private var endBossLastLaserTime: TimeInterval = 0
     private var backgroundNode: SKNode!
     private var spaceParallaxNode: SKNode!   // planeten (snellere laag)
     private var starParallaxNode: SKNode!    // ster-asset (langzamere laag)
@@ -384,18 +396,36 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             spawnInterval = max(0.6, spawnInterval * 0.82)
         }
 
-        // Spawn enemies (possibly 2 in later waves)
-        if currentTime - lastSpawnTime > spawnInterval {
-            lastSpawnTime = currentTime
-            spawnEnemy()
-            if waveIndex >= 1 && Bool.random() { spawnEnemy() }
-            if waveIndex >= 2 && Bool.random() { spawnEnemy() }
+        // Eindbaas na 1 minuut (eenmalig)
+        if endBossNode == nil && elapsed >= endBossSpawnAfter {
+            spawnEndBoss()
         }
 
-        // Formaties alienplanes (vanaf wave 1)
-        if waveIndex >= 1 && currentTime - lastFormationSpawnTime > formationSpawnInterval {
-            lastFormationSpawnTime = currentTime
-            spawnEnemyFormation()
+        // Spawn enemies alleen als er geen eindbaas is
+        if endBossNode == nil {
+            if currentTime - lastSpawnTime > spawnInterval {
+                lastSpawnTime = currentTime
+                spawnEnemy()
+                if waveIndex >= 1 && Bool.random() { spawnEnemy() }
+                if waveIndex >= 2 && Bool.random() { spawnEnemy() }
+            }
+            // Formaties alienplanes (vanaf wave 1)
+            if waveIndex >= 1 && currentTime - lastFormationSpawnTime > formationSpawnInterval {
+                lastFormationSpawnTime = currentTime
+                spawnEnemyFormation()
+            }
+        }
+
+        // Eindbaas: blijft bovenin, draaien en elke seconde 4 lasers
+        if let boss = endBossNode, boss.parent != nil {
+            boss.zRotation += endBossRotationSpeed * CGFloat(dt)
+            if currentTime - endBossLastLaserTime >= endBossLaserInterval {
+                endBossLastLaserTime = currentTime
+                let sideHits = (boss.userData?["bossSideHits"] as? [Int]) ?? [0,0,0,0]
+                for side in 0..<4 where sideHits[side] < endBossSideMaxHits {
+                    fireBossLaser(from: boss, direction: side)
+                }
+            }
         }
 
         // Kogels met richting (spread shot): beweeg in hun hoek
@@ -411,26 +441,37 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             }
         }
 
-        // Handmatige hit: kogel vs vijand – kogel stopt bij eerste treffer (gaat niet door)
+        // Handmatige hit: kogel vs vijand (en eindbaas als physics contact mist)
         var hits: [(bullet: SKNode, enemy: SKNode)] = []
         enumerateChildNodes(withName: "playerBullet") { bullet, _ in
             var bulletHit = false
             self.enumerateChildNodes(withName: "enemy") { enemy, _ in
                 if !bulletHit && bullet.frame.intersects(enemy.frame) {
                     hits.append((bullet, enemy))
-                    bulletHit = true  // één kogel = één treffer, daarna stopt de kogel
+                    bulletHit = true
+                }
+            }
+            if !bulletHit {
+                self.enumerateChildNodes(withName: "endBoss") { boss, _ in
+                    if bullet.frame.intersects(boss.frame) {
+                        hits.append((bullet, boss))
+                    }
                 }
             }
         }
         for (bullet, enemy) in hits {
-            let pos = enemy.position
-            let color = debrisColor(for: enemy)
             bullet.removeAllActions()
-            bullet.removeFromParent()  // kogel verdwijnt direct, vliegt niet door
-            enemy.removeFromParent()
-            addEnemyDebris(at: pos, color: color)
-            addScore(bulletScore)
-            trySpawnPowerup(at: pos)
+            bullet.removeFromParent()
+            if enemy.name == "endBoss" {
+                applyBossDamage(from: bullet.position, isRocket: false)
+            } else {
+                let pos = enemy.position
+                let color = debrisColor(for: enemy)
+                enemy.removeFromParent()
+                addEnemyDebris(at: pos, color: color)
+                addScore(bulletScore)
+                trySpawnPowerup(at: pos)
+            }
         }
 
         // Raketten: zwaar gedrag – stuwkracht alleen achterin, traag draaien, alleen vijanden op scherm
@@ -451,13 +492,15 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             }
             if rocketHomingEnabled && targetNode == nil && !flyingStraight {
                 var nearest: (node: SKNode, dist: CGFloat)?
-                self.enumerateChildNodes(withName: "enemy") { enemy, _ in
-                    guard onScreen(enemy.position) else { return }
-                    let dx = enemy.position.x - rocket.position.x
-                    let dy = enemy.position.y - rocket.position.y
+                func checkTarget(_ node: SKNode) {
+                    guard onScreen(node.position) else { return }
+                    let dx = node.position.x - rocket.position.x
+                    let dy = node.position.y - rocket.position.y
                     let d = dx * dx + dy * dy
-                    if nearest == nil || d < nearest!.dist { nearest = (enemy, d) }
+                    if nearest == nil || d < nearest!.dist { nearest = (node, d) }
                 }
+                self.enumerateChildNodes(withName: "enemy") { enemy, _ in checkTarget(enemy) }
+                self.enumerateChildNodes(withName: "endBoss") { boss, _ in checkTarget(boss) }
                 targetNode = nearest?.node
                 if targetNode != nil {
                     var ud = rocket.userData ?? [:]
@@ -500,7 +543,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             }
         }
 
-        // Rocket vs enemy hit (meer damage = meer punten)
+        // Rocket vs enemy hit (en eindbaas)
         var rocketHits: [(rocket: SKNode, enemy: SKNode)] = []
         enumerateChildNodes(withName: "playerRocket") { rocket, _ in
             var hit = false
@@ -510,15 +553,26 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
                     hit = true
                 }
             }
+            if !hit {
+                self.enumerateChildNodes(withName: "endBoss") { boss, _ in
+                    if rocket.frame.intersects(boss.frame) {
+                        rocketHits.append((rocket, boss))
+                    }
+                }
+            }
         }
         for (rocket, enemy) in rocketHits {
-            let pos = enemy.position
-            let color = debrisColor(for: enemy)
             rocket.removeFromParent()
-            enemy.removeFromParent()
-            addEnemyDebris(at: pos, color: color)
-            addScore(rocketScore)
-            trySpawnPowerup(at: pos)
+            if enemy.name == "endBoss" {
+                applyBossDamage(from: rocket.position, isRocket: true)
+            } else {
+                let pos = enemy.position
+                let color = debrisColor(for: enemy)
+                enemy.removeFromParent()
+                addEnemyDebris(at: pos, color: color)
+                addScore(rocketScore)
+                trySpawnPowerup(at: pos)
+            }
         }
 
         // Handmatige powerup-pickup (physics contact mist vaak)
@@ -572,6 +626,12 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
                 return
             }
         }
+        enumerateChildNodes(withName: "endBoss") { boss, _ in
+            if boss.frame.intersects(self.player.frame), self.lastUpdateTime >= self.invincibleUntil {
+                self.invincibleUntil = self.lastUpdateTime + invincibilityDuration
+                self.loseOneLife()
+            }
+        }
     }
 
     private func firePlayerBullet() {
@@ -593,7 +653,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     }
 
     private func fireRocket() {
-        let rocket = SKSpriteNode(imageNamed: "rocket")
+        let rocket = SKSpriteNode(imageNamed: "rocket2")
         let scale: CGFloat = 0.25  // 50% kleiner (was 0.5)
         rocket.setScale(scale)
         let scaledW = rocket.size.width * scale
@@ -920,6 +980,121 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         return type == "alienplane" ? alienplaneDebrisColor : enemy1DebrisColor
     }
 
+    // MARK: - Eindbaas
+
+    private func spawnEndBoss() {
+        let boss = SKSpriteNode(imageNamed: "endboss1")
+        let scale: CGFloat = 0.6
+        boss.setScale(scale)
+        let scaledW = boss.size.width * scale
+        let scaledH = boss.size.height * scale
+        boss.position = CGPoint(x: size.width / 2, y: size.height - 120)
+        boss.name = "endBoss"
+        boss.zPosition = 15
+        boss.physicsBody = SKPhysicsBody(rectangleOf: CGSize(width: scaledW, height: scaledH))
+        boss.physicsBody?.isDynamic = false
+        boss.physicsBody?.categoryBitMask = categoryEnemy
+        boss.physicsBody?.contactTestBitMask = categoryPlayer | categoryPlayerBullet | categoryPlayerRocket
+        boss.physicsBody?.collisionBitMask = 0
+        boss.physicsBody?.usesPreciseCollisionDetection = true
+        boss.userData = [
+            "endBoss": true,
+            "bossHealth": endBossTotalHealth,
+            "bossSideHits": [0, 0, 0, 0] as [Int]
+        ]
+        addChild(boss)
+        endBossNode = boss
+        endBossLastLaserTime = lastUpdateTime
+
+        // Healthbar boven de eindbaas: eerst groen, wordt rood naarmate health daalt
+        let barW = scaledW * 1.2
+        let barH: CGFloat = 6
+        let barY = scaledH / 2 + barH / 2 + 12
+        let bg = SKSpriteNode(color: SKColor(white: 0.2, alpha: 0.95), size: CGSize(width: barW, height: barH))
+        bg.position = CGPoint(x: 0, y: barY)
+        bg.zPosition = 1
+        boss.addChild(bg)
+        let fill = SKSpriteNode(color: SKColor(red: 0.2, green: 0.85, blue: 0.3, alpha: 1), size: CGSize(width: barW, height: barH))
+        fill.anchorPoint = CGPoint(x: 0, y: 0.5)
+        fill.position = CGPoint(x: -barW / 2, y: barY)
+        fill.zPosition = 2
+        fill.name = "bossHealthFill"
+        boss.addChild(fill)
+    }
+
+    /// Richting: 0=omhoog, 1=rechts, 2=omlaag, 3=links
+    private func fireBossLaser(from boss: SKSpriteNode, direction: Int) {
+        guard boss.parent != nil else { return }
+        let bullet = SKSpriteNode(imageNamed: "bullet4")
+        let bulletSize = CGSize(width: 6, height: 14)
+        bullet.xScale = bulletSize.width / bullet.size.width
+        bullet.yScale = bulletSize.height / bullet.size.height
+        let halfW = boss.frame.width / 2
+        let halfH = boss.frame.height / 2
+        let dx: CGFloat
+        let dy: CGFloat
+        let moveDx: CGFloat
+        let moveDy: CGFloat
+        switch direction {
+        case 0: dx = 0; dy = halfH + bulletSize.height / 2; moveDx = 0; moveDy = size.height + 100
+        case 1: dx = halfW + bulletSize.width / 2; dy = 0; moveDx = size.width + 100; moveDy = 0
+        case 2: dx = 0; dy = -halfH - bulletSize.height / 2; moveDx = 0; moveDy = -size.height - 100
+        default: dx = -halfW - bulletSize.width / 2; dy = 0; moveDx = -size.width - 100; moveDy = 0
+        }
+        bullet.position = CGPoint(x: boss.position.x + dx, y: boss.position.y + dy)
+        bullet.name = "enemyBullet"
+        bullet.physicsBody = SKPhysicsBody(rectangleOf: bulletSize)
+        bullet.physicsBody?.isDynamic = false
+        bullet.physicsBody?.categoryBitMask = categoryEnemyBullet
+        bullet.physicsBody?.contactTestBitMask = categoryPlayer
+        bullet.physicsBody?.collisionBitMask = 0
+        bullet.zPosition = 15
+        addChild(bullet)
+        let dist = sqrt(moveDx * moveDx + moveDy * moveDy)
+        let duration = max(0.5, dist / endBossBulletSpeed)
+        let move = SKAction.moveBy(x: moveDx, y: moveDy, duration: duration)
+        bullet.run(SKAction.sequence([move, SKAction.removeFromParent()]))
+    }
+
+    private func applyBossDamage(from hitPosition: CGPoint, isRocket: Bool) {
+        guard let boss = endBossNode, boss.parent != nil else { return }
+        var health = (boss.userData?["bossHealth"] as? CGFloat) ?? endBossTotalHealth
+        var sideHits = (boss.userData?["bossSideHits"] as? [Int]) ?? [0, 0, 0, 0]
+        let damage: CGFloat = isRocket ? 25 : 10
+        health -= damage
+
+        // Welke kant geraakt (hoek van boss naar treffer): 0=boven, 1=rechts, 2=onder, 3=links
+        let ax = hitPosition.x - boss.position.x
+        let ay = hitPosition.y - boss.position.y
+        let angle = atan2(ay, ax)
+        let side: Int
+        if angle >= .pi / 4 && angle < 3 * .pi / 4 { side = 0 }
+        else if angle >= -(.pi / 4) && angle < .pi / 4 { side = 1 }
+        else if angle >= -3 * .pi / 4 && angle < -(.pi / 4) { side = 2 }
+        else { side = 3 }
+        sideHits[side] = min(sideHits[side] + 1, endBossSideMaxHits)
+
+        boss.userData?["bossHealth"] = health
+        boss.userData?["bossSideHits"] = sideHits
+
+        // Healthbar: schaal en kleur (groen → rood)
+        let frac = max(0, min(1, health / endBossTotalHealth))
+        if let fill = boss.childNode(withName: "bossHealthFill") as? SKSpriteNode {
+            fill.xScale = frac
+            let r = 1.0 - frac
+            let g = 0.2 + 0.65 * frac
+            fill.color = SKColor(red: 0.2 + r * 0.8, green: g, blue: 0.3 * frac, alpha: 1)
+        }
+
+        if health <= 0 {
+            let pos = boss.position
+            boss.removeFromParent()
+            endBossNode = nil
+            addEnemyDebris(at: pos, color: endBossDebrisColor)
+            addScore(endBossScore)
+        }
+    }
+
     /// Vijand klapt uit elkaar in gekleurde brokstukken die uiteenvliegen en omlaag vallen.
     private func addEnemyDebris(at position: CGPoint, color: SKColor) {
         let pieceCount = 10
@@ -953,30 +1128,38 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         let maskA = bodyA.categoryBitMask
         let maskB = bodyB.categoryBitMask
 
-        // Player bullet vs Enemy
+        // Player bullet vs Enemy (of eindbaas)
         if (maskA == categoryPlayerBullet && maskB == categoryEnemy) || (maskA == categoryEnemy && maskB == categoryPlayerBullet) {
             let bullet = maskA == categoryPlayerBullet ? bodyA.node : bodyB.node
             let enemy = maskA == categoryEnemy ? bodyA.node : bodyB.node
-            let hitPos = enemy?.position ?? bullet?.position ?? .zero
-            let color = debrisColor(for: enemy)
             bullet?.removeFromParent()
-            enemy?.removeFromParent()
-            addEnemyDebris(at: hitPos, color: color)
-            addScore(bulletScore)
-            trySpawnPowerup(at: hitPos)
+            if enemy?.name == "endBoss" {
+                applyBossDamage(from: contact.contactPoint, isRocket: false)
+            } else {
+                let hitPos = enemy?.position ?? .zero
+                let color = debrisColor(for: enemy)
+                enemy?.removeFromParent()
+                addEnemyDebris(at: hitPos, color: color)
+                addScore(bulletScore)
+                trySpawnPowerup(at: hitPos)
+            }
         }
 
-        // Player rocket vs Enemy (meer damage)
+        // Player rocket vs Enemy (of eindbaas)
         if (maskA == categoryPlayerRocket && maskB == categoryEnemy) || (maskA == categoryEnemy && maskB == categoryPlayerRocket) {
             let rocket = maskA == categoryPlayerRocket ? bodyA.node : bodyB.node
             let enemy = maskA == categoryEnemy ? bodyA.node : bodyB.node
-            let hitPos = enemy?.position ?? rocket?.position ?? .zero
-            let color = debrisColor(for: enemy)
             rocket?.removeFromParent()
-            enemy?.removeFromParent()
-            addEnemyDebris(at: hitPos, color: color)
-            addScore(rocketScore)
-            trySpawnPowerup(at: hitPos)
+            if enemy?.name == "endBoss" {
+                applyBossDamage(from: contact.contactPoint, isRocket: true)
+            } else {
+                let hitPos = enemy?.position ?? .zero
+                let color = debrisColor(for: enemy)
+                enemy?.removeFromParent()
+                addEnemyDebris(at: hitPos, color: color)
+                addScore(rocketScore)
+                trySpawnPowerup(at: hitPos)
+            }
         }
 
         // Powerup vs Player
@@ -1004,15 +1187,20 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             if lastUpdateTime >= invincibleUntil { playerHitByBullet() }
         }
 
-        // Player vs Enemy (ram) – vliegtuig raakt je = één leven eraf (na 3x game over)
+        // Player vs Enemy (ram) – of tegen eindbaas
         if (maskA == categoryPlayer && maskB == categoryEnemy) || (maskA == categoryEnemy && maskB == categoryPlayer) {
             let enemy = maskA == categoryEnemy ? bodyA.node : bodyB.node
-            let pos = enemy?.position ?? .zero
-            let color = debrisColor(for: enemy)
-            enemy?.removeFromParent()
-            addEnemyDebris(at: pos, color: color)
-            invincibleUntil = lastUpdateTime + invincibilityDuration
-            loseOneLife()
+            if enemy?.name == "endBoss" {
+                invincibleUntil = lastUpdateTime + invincibilityDuration
+                loseOneLife()
+            } else {
+                let pos = enemy?.position ?? .zero
+                let color = debrisColor(for: enemy)
+                enemy?.removeFromParent()
+                addEnemyDebris(at: pos, color: color)
+                invincibleUntil = lastUpdateTime + invincibilityDuration
+                loseOneLife()
+            }
         }
     }
 
