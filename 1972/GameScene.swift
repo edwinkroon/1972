@@ -48,7 +48,7 @@ private let alienplaneDebrisColor = SKColor(red: 0.2, green: 0.5, blue: 0.25, al
 
 // Eindbaas
 private let endBossSpawnAfter: TimeInterval = 60.0       // na 1 minuut
-private let endBossTotalHealth: CGFloat = 200
+private let endBossTotalHealth: CGFloat = 1000   // 5× meer leven dan voorheen (200)
 private let endBossSideMaxHits: Int = 6                   // per kant; na 6 treffers gaat die laser kapot
 private let endBossLaserInterval: TimeInterval = 1.0
 private let endBossRotationSpeed: CGFloat = 0.3           // radialen per seconde
@@ -429,6 +429,9 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         // Eindbaas: blijft bovenin, draaien en elke seconde 4 lasers
         if let boss = endBossNode, boss.parent != nil {
             boss.zRotation += endBossRotationSpeed * CGFloat(dt)
+            // Healthbar niet meedraaien: tegenrotatie zodat de balk horizontaal blijft
+            boss.childNode(withName: "bossHealthBg")?.zRotation = -boss.zRotation
+            boss.childNode(withName: "bossHealthFill")?.zRotation = -boss.zRotation
             if currentTime - endBossLastLaserTime >= endBossLaserInterval {
                 endBossLastLaserTime = currentTime
                 let sideHits = (boss.userData?["bossSideHits"] as? [Int]) ?? [0,0,0,0]
@@ -934,9 +937,14 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     private func activateLaser() {
         laserUntil = lastUpdateTime + laserDuration
         if laserBeamNode == nil {
-            let beam = SKSpriteNode(color: SKColor(red: 0.3, green: 0.7, blue: 1, alpha: 0.7), size: CGSize(width: 12, height: 100))
+            let beam = SKSpriteNode(color: SKColor(red: 0.4, green: 0.8, blue: 1, alpha: 0.95), size: CGSize(width: 12, height: 100))
             beam.name = "laserBeam"
             beam.zPosition = 14
+            // Glow: bredere, zachte laag achter de straal
+            let glow = SKSpriteNode(color: SKColor(red: 0.4, green: 0.8, blue: 1, alpha: 0.55), size: CGSize(width: 28, height: 100))
+            glow.zPosition = -1
+            glow.name = "laserGlow"
+            beam.addChild(glow)
             addChild(beam)
             laserBeamNode = beam
         }
@@ -948,6 +956,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         let fromY = pl.position.y + pl.size.height / 2
         let h = max(20, topY - fromY)
         beam.size = CGSize(width: 12, height: h)
+        (beam.childNode(withName: "laserGlow") as? SKSpriteNode)?.size = CGSize(width: 28, height: h)
         beam.position = CGPoint(x: pl.position.x, y: fromY + h / 2)
         let beamRect = beam.frame
         var hitEnemies: [SKNode] = []
@@ -1023,6 +1032,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         let bg = SKSpriteNode(color: SKColor(white: 0.2, alpha: 0.95), size: CGSize(width: barW, height: barH))
         bg.position = CGPoint(x: 0, y: barY)
         bg.zPosition = 1
+        bg.name = "bossHealthBg"
         boss.addChild(bg)
         let fill = SKSpriteNode(color: SKColor(red: 0.2, green: 0.85, blue: 0.3, alpha: 1), size: CGSize(width: barW, height: barH))
         fill.anchorPoint = CGPoint(x: 0, y: 0.5)
@@ -1038,6 +1048,11 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         // Rode laserstraal: lang en dun, draait mee met de eindbaas
         let laserSize = CGSize(width: 5, height: 32)
         let laser = SKSpriteNode(color: SKColor(red: 1, green: 0.15, blue: 0.15, alpha: 1), size: laserSize)
+        // Glow: bredere, zachte rode halo om de straal
+        let glowSize = CGSize(width: 18, height: 44)
+        let glow = SKSpriteNode(color: SKColor(red: 1, green: 0.2, blue: 0.2, alpha: 0.5), size: glowSize)
+        glow.zPosition = -1
+        laser.addChild(glow)
         // Wereldhoek van deze kant: 0=rechts boss, 1=onder, 2=links, 3=boven (lokaal) → + boss rotatie
         let localAngle = CGFloat(direction) * .pi / 2
         let worldAngle = boss.zRotation + localAngle
