@@ -70,6 +70,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     private var spawnInterval: TimeInterval = 2.0
     private var touchLocation: CGPoint?   // x en y voor horizontaal + verticaal bewegen
     private var gameOver = false
+    private var levelComplete = false
     private var lastPlayerFireTime: TimeInterval = 0
     private var gameStartTime: TimeInterval = 0
     private var waveIndex: Int = 0
@@ -298,11 +299,20 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             }
             return
         }
+        if levelComplete {
+            let node = atPoint(location)
+            if node.name == "nextLevelButton" || node.parent?.name == "nextLevelButton" {
+                let newScene = GameScene(size: size)
+                newScene.scaleMode = scaleMode
+                view?.presentScene(newScene, transition: .crossFade(withDuration: 0.5))
+            }
+            return
+        }
         touchLocation = location
     }
 
     override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent?) {
-        guard !gameOver else { return }
+        guard !gameOver, !levelComplete else { return }
         touchLocation = touches.first?.location(in: self)
     }
 
@@ -319,7 +329,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         let dt = currentTime - lastUpdateTime
         lastUpdateTime = currentTime
 
-        if gameOver { return }
+        if gameOver || levelComplete { return }
 
         // Parallax sterren (langzaam) en planeten (sneller) voor diepte; naadloze wrap op content-hoogte
         let spaceContentH = size.height * 2.2
@@ -984,7 +994,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
 
     private func spawnEndBoss() {
         let boss = SKSpriteNode(imageNamed: "endboss1")
-        let scale: CGFloat = 0.6
+        let scale: CGFloat = 1.2   // twee keer zo groot (was 0.6)
         boss.setScale(scale)
         let scaledW = boss.size.width * scale
         let scaledH = boss.size.height * scale
@@ -1022,12 +1032,12 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         boss.addChild(fill)
     }
 
-    /// Richting 0,1,2,3 = de vier kanten van de baas; meedraaien met boss.zRotation
+    /// Richting 0,1,2,3 = de vier kanten van de baas; meedraaien met boss.zRotation. Alleen lasers, geen kogels.
     private func fireBossLaser(from boss: SKSpriteNode, direction: Int) {
         guard boss.parent != nil else { return }
-        // Rode laser: lang en dun, draait mee met de eindbaas
-        let laserSize = CGSize(width: 4, height: 22)
-        let laser = SKSpriteNode(color: SKColor(red: 1, green: 0.2, blue: 0.2, alpha: 1), size: laserSize)
+        // Rode laserstraal: lang en dun, draait mee met de eindbaas
+        let laserSize = CGSize(width: 5, height: 32)
+        let laser = SKSpriteNode(color: SKColor(red: 1, green: 0.15, blue: 0.15, alpha: 1), size: laserSize)
         // Wereldhoek van deze kant: 0=rechts boss, 1=onder, 2=links, 3=boven (lokaal) → + boss rotatie
         let localAngle = CGFloat(direction) * .pi / 2
         let worldAngle = boss.zRotation + localAngle
@@ -1088,7 +1098,68 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             endBossNode = nil
             addEnemyDebris(at: pos, color: endBossDebrisColor)
             addScore(endBossScore)
+            showLevelCompleteScreen()
         }
+    }
+
+    private func showLevelCompleteScreen() {
+        levelComplete = true
+        physicsWorld.contactDelegate = nil
+
+        let overlay = SKSpriteNode(color: SKColor(red: 0.06, green: 0.08, blue: 0.18, alpha: 0.9), size: size)
+        overlay.position = CGPoint(x: size.width / 2, y: size.height / 2)
+        overlay.zPosition = 199
+        overlay.name = "levelCompleteOverlay"
+        addChild(overlay)
+
+        let panelW = size.width - 48
+        let panelH: CGFloat = 260
+        let panel = SKSpriteNode(color: SKColor(white: 0.12, alpha: 0.95), size: CGSize(width: panelW, height: panelH))
+        panel.position = CGPoint(x: size.width / 2, y: size.height / 2)
+        panel.zPosition = 200
+        addChild(panel)
+
+        let title = SKLabelNode(fontNamed: "Avenir-Bold")
+        title.fontSize = 38
+        title.fontColor = .white
+        title.text = "Einde level"
+        title.position = CGPoint(x: size.width / 2, y: size.height / 2 + 70)
+        title.zPosition = 201
+        addChild(title)
+
+        let sub = SKLabelNode(fontNamed: "Avenir")
+        sub.fontSize = 20
+        sub.fontColor = SKColor(white: 0.8, alpha: 1)
+        sub.text = "Eindbaas verslagen!"
+        sub.position = CGPoint(x: size.width / 2, y: size.height / 2 + 22)
+        sub.zPosition = 201
+        addChild(sub)
+
+        let scoreLabel = SKLabelNode(fontNamed: "Avenir-Bold")
+        scoreLabel.fontSize = 22
+        scoreLabel.fontColor = SKColor(red: 0.95, green: 0.75, blue: 0.35, alpha: 1)
+        scoreLabel.text = "Score: \(score)"
+        scoreLabel.position = CGPoint(x: size.width / 2, y: size.height / 2 - 28)
+        scoreLabel.zPosition = 201
+        addChild(scoreLabel)
+
+        let btnW: CGFloat = 220
+        let btnH: CGFloat = 48
+        let nextBg = SKSpriteNode(color: SKColor(red: 0.18, green: 0.5, blue: 0.22, alpha: 1), size: CGSize(width: btnW, height: btnH))
+        nextBg.position = CGPoint(x: size.width / 2, y: size.height / 2 - 100)
+        nextBg.zPosition = 201
+        nextBg.name = "nextLevelButton"
+        addChild(nextBg)
+
+        let nextLabel = SKLabelNode(fontNamed: "Avenir-Bold")
+        nextLabel.fontSize = 24
+        nextLabel.fontColor = .white
+        nextLabel.text = "Volgende level"
+        nextLabel.verticalAlignmentMode = .center
+        nextLabel.position = CGPoint(x: size.width / 2, y: size.height / 2 - 100)
+        nextLabel.zPosition = 202
+        nextLabel.name = "nextLevelButton"
+        addChild(nextLabel)
     }
 
     /// Vijand klapt uit elkaar in gekleurde brokstukken die uiteenvliegen en omlaag vallen.
