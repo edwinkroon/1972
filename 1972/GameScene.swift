@@ -1022,38 +1022,34 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         boss.addChild(fill)
     }
 
-    /// Richting: 0=omhoog, 1=rechts, 2=omlaag, 3=links
+    /// Richting 0,1,2,3 = de vier kanten van de baas; meedraaien met boss.zRotation
     private func fireBossLaser(from boss: SKSpriteNode, direction: Int) {
         guard boss.parent != nil else { return }
-        let bullet = SKSpriteNode(imageNamed: "bullet4")
-        let bulletSize = CGSize(width: 6, height: 14)
-        bullet.xScale = bulletSize.width / bullet.size.width
-        bullet.yScale = bulletSize.height / bullet.size.height
-        let halfW = boss.frame.width / 2
-        let halfH = boss.frame.height / 2
-        let dx: CGFloat
-        let dy: CGFloat
-        let moveDx: CGFloat
-        let moveDy: CGFloat
-        switch direction {
-        case 0: dx = 0; dy = halfH + bulletSize.height / 2; moveDx = 0; moveDy = size.height + 100
-        case 1: dx = halfW + bulletSize.width / 2; dy = 0; moveDx = size.width + 100; moveDy = 0
-        case 2: dx = 0; dy = -halfH - bulletSize.height / 2; moveDx = 0; moveDy = -size.height - 100
-        default: dx = -halfW - bulletSize.width / 2; dy = 0; moveDx = -size.width - 100; moveDy = 0
-        }
-        bullet.position = CGPoint(x: boss.position.x + dx, y: boss.position.y + dy)
-        bullet.name = "enemyBullet"
-        bullet.physicsBody = SKPhysicsBody(rectangleOf: bulletSize)
-        bullet.physicsBody?.isDynamic = false
-        bullet.physicsBody?.categoryBitMask = categoryEnemyBullet
-        bullet.physicsBody?.contactTestBitMask = categoryPlayer
-        bullet.physicsBody?.collisionBitMask = 0
-        bullet.zPosition = 15
-        addChild(bullet)
+        // Rode laser: lang en dun, draait mee met de eindbaas
+        let laserSize = CGSize(width: 4, height: 22)
+        let laser = SKSpriteNode(color: SKColor(red: 1, green: 0.2, blue: 0.2, alpha: 1), size: laserSize)
+        // Wereldhoek van deze kant: 0=rechts boss, 1=onder, 2=links, 3=boven (lokaal) → + boss rotatie
+        let localAngle = CGFloat(direction) * .pi / 2
+        let worldAngle = boss.zRotation + localAngle
+        let moveDx = cos(worldAngle) * (size.width + 120)
+        let moveDy = sin(worldAngle) * (size.height + 120)
         let dist = sqrt(moveDx * moveDx + moveDy * moveDy)
+        let offsetDist = max(boss.frame.width, boss.frame.height) / 2 + laserSize.height / 2
+        let spawnX = boss.position.x + cos(worldAngle) * offsetDist
+        let spawnY = boss.position.y + sin(worldAngle) * offsetDist
+        laser.position = CGPoint(x: spawnX, y: spawnY)
+        laser.zRotation = worldAngle - .pi / 2  // lengte van de laser in vliegrichting
+        laser.name = "enemyBullet"
+        laser.physicsBody = SKPhysicsBody(rectangleOf: laserSize)
+        laser.physicsBody?.isDynamic = false
+        laser.physicsBody?.categoryBitMask = categoryEnemyBullet
+        laser.physicsBody?.contactTestBitMask = categoryPlayer
+        laser.physicsBody?.collisionBitMask = 0
+        laser.zPosition = 15
+        addChild(laser)
         let duration = max(0.5, dist / endBossBulletSpeed)
         let move = SKAction.moveBy(x: moveDx, y: moveDy, duration: duration)
-        bullet.run(SKAction.sequence([move, SKAction.removeFromParent()]))
+        laser.run(SKAction.sequence([move, SKAction.removeFromParent()]))
     }
 
     private func applyBossDamage(from hitPosition: CGPoint, isRocket: Bool) {
